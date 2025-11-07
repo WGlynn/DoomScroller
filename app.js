@@ -402,56 +402,158 @@ class ScrollBalancePro {
 
     // ===== WELLNESS CALCULATION =====
     calculateWellnessScore() {
-        // Factors:
-        // 1. Goal alignment (40%)
-        // 2. Time management (30%)
-        // 3. Mood trend (20%)
-        // 4. Engagement quality (10%)
+        // Advanced wellness calculation with 7 factors
+        // 1. Goal alignment (25%) - How well content matches goals
+        // 2. Time management (20%) - Balance of screen time
+        // 3. Mood trajectory (15%) - Improving vs declining mood
+        // 4. Engagement quality (15%) - Valuable vs mindless consumption
+        // 5. Consistency bonus (10%) - Maintaining healthy patterns
+        // 6. Content diversity (10%) - Variety of content types
+        // 7. Recency weighting (5%) - Recent behavior matters more
 
-        let score = 50; // Start at baseline
+        let score = 0;
 
-        // Goal alignment (40%)
+        // 1. GOAL ALIGNMENT (25 points max)
         const totalRatings = Math.max(this.userData.contentRatings.length, 1);
-        const goalAlignedRatings = this.userData.contentRatings.filter(r => r.aligned).length;
-        const goalScore = (goalAlignedRatings / totalRatings) * 40;
+        const recentRatings = this.userData.contentRatings.slice(-20); // Last 20 ratings
+        const alignedRatings = recentRatings.filter(r => r.aligned).length;
+        const alignmentRatio = alignedRatings / Math.max(recentRatings.length, 1);
 
-        // Time management (30%) - use DAILY stats, not lifetime
+        // Bonus for high alignment
+        let goalScore = alignmentRatio * 25;
+        if (alignmentRatio > 0.8) goalScore += 5; // Bonus for excellent alignment
+        score += Math.min(goalScore, 30);
+
+        // 2. TIME MANAGEMENT (20 points max)
         const dailyHours = (this.userData.dailyStats.screenTime || 0) / 3600;
-        const targetHours = 3; // Reasonable daily target
-        let timeScore;
-        if (dailyHours <= targetHours) {
-            timeScore = 30; // Full points if under target
-        } else {
-            // Gradually decrease as time increases beyond target
-            timeScore = Math.max(0, 30 * (1 - (dailyHours - targetHours) / targetHours));
-        }
+        let timeScore = 20;
 
-        // Mood trend (20%)
-        let moodScore = 10; // Default baseline
-        const recentMoods = this.userData.moodHistory.slice(-5);
-        if (recentMoods.length > 0) {
-            const positiveMoods = recentMoods.filter(m =>
+        if (dailyHours === 0) {
+            timeScore = 15; // Some usage is good
+        } else if (dailyHours < 1) {
+            timeScore = 18; // Light usage
+        } else if (dailyHours <= 2) {
+            timeScore = 20; // Ideal range
+        } else if (dailyHours <= 3) {
+            timeScore = 17; // Moderate
+        } else if (dailyHours <= 4) {
+            timeScore = 12; // Getting high
+        } else if (dailyHours <= 6) {
+            timeScore = 7; // High usage
+        } else {
+            timeScore = Math.max(0, 7 - (dailyHours - 6) * 2); // Excessive
+        }
+        score += timeScore;
+
+        // 3. MOOD TRAJECTORY (15 points max)
+        const recentMoods = this.userData.moodHistory.slice(-10);
+        let moodScore = 10; // Default
+
+        if (recentMoods.length >= 3) {
+            // Calculate mood trend
+            const moodScores = recentMoods.map(m => m.score || this.getMoodScore(m.mood));
+            const recentAvg = moodScores.slice(-3).reduce((a, b) => a + b, 0) / 3;
+            const olderAvg = moodScores.slice(0, -3).reduce((a, b) => a + b, 0) / Math.max(moodScores.length - 3, 1);
+
+            // Reward improving mood
+            if (recentAvg > olderAvg) {
+                moodScore = 15; // Improving
+            } else if (recentAvg >= 75) {
+                moodScore = 13; // Consistently good
+            } else if (recentAvg >= 60) {
+                moodScore = 10; // Moderate
+            } else {
+                moodScore = 7; // Concerning
+            }
+
+            // Bonus for recent positive moods
+            const recentPositive = recentMoods.slice(-3).filter(m =>
                 ['energized', 'calm', 'focused', 'happy'].includes(m.mood)
             ).length;
-            moodScore = (positiveMoods / recentMoods.length) * 20;
+            if (recentPositive === 3) moodScore += 3;
+        }
+        score += Math.min(moodScore, 18);
+
+        // 4. ENGAGEMENT QUALITY (15 points max)
+        let engagementScore = 7; // Default
+
+        if (recentRatings.length > 0) {
+            const valuableCount = recentRatings.filter(r => r.rating === 'valuable').length;
+            const valuableRatio = valuableCount / recentRatings.length;
+
+            engagementScore = valuableRatio * 15;
+
+            // Penalty for excessive skipping (mindless scrolling)
+            const skipCount = recentRatings.filter(r => r.rating === 'skip').length;
+            const skipRatio = skipCount / recentRatings.length;
+            if (skipRatio > 0.7) {
+                engagementScore *= 0.7; // 30% penalty for mindless scrolling
+            }
+        }
+        score += engagementScore;
+
+        // 5. CONSISTENCY BONUS (10 points max)
+        let consistencyScore = 0;
+
+        // Check streak
+        if (this.userData.streak >= 7) consistencyScore += 5;
+        else if (this.userData.streak >= 3) consistencyScore += 3;
+        else if (this.userData.streak >= 1) consistencyScore += 1;
+
+        // Check historical consistency
+        const historicalDates = Object.keys(this.historicalData);
+        if (historicalDates.length >= 5) {
+            const recentScores = historicalDates.slice(-5).map(date =>
+                this.historicalData[date].wellnessScore
+            );
+            const avgScore = recentScores.reduce((a, b) => a + b, 0) / recentScores.length;
+            if (avgScore >= 75) consistencyScore += 5;
         }
 
-        // Engagement quality (10%)
-        let engagementScore = 5; // Default baseline
-        if (totalRatings > 0) {
-            const valuableContent = this.userData.contentRatings.filter(r => r.rating === 'valuable').length;
-            engagementScore = (valuableContent / totalRatings) * 10;
+        score += consistencyScore;
+
+        // 6. CONTENT DIVERSITY (10 points max)
+        let diversityScore = 5; // Default
+
+        if (recentRatings.length >= 10) {
+            const goalTypes = new Set(recentRatings.map(r => r.goal));
+            const diversityRatio = goalTypes.size / 5; // Max 5 goal types
+            diversityScore = diversityRatio * 10;
+
+            // Slight bonus for exploring different content
+            if (goalTypes.size >= 3) diversityScore += 2;
         }
+        score += Math.min(diversityScore, 12);
 
-        score = Math.round(goalScore + timeScore + moodScore + engagementScore);
+        // 7. RECENCY WEIGHTING (5 points max)
+        // Reward recent positive actions
+        const lastHourRatings = this.userData.contentRatings.filter(r => {
+            return Date.now() - r.timestamp < 3600000; // Last hour
+        });
 
-        // Ensure score is within bounds
-        this.userData.wellnessScore = Math.max(0, Math.min(100, score));
+        let recencyScore = 2; // Default
+        if (lastHourRatings.length > 0) {
+            const recentAligned = lastHourRatings.filter(r => r.aligned && r.rating === 'valuable').length;
+            const recentRatio = recentAligned / lastHourRatings.length;
+            recencyScore = recentRatio * 5;
+        }
+        score += recencyScore;
 
-        // Only push score if it changed significantly (avoid array bloat)
+        // FINAL ADJUSTMENTS
+        // Normalize to 0-100 range
+        score = Math.round(score);
+        score = Math.max(20, Math.min(100, score)); // Floor at 20, ceiling at 100
+
+        // Smooth transitions (moving average with previous score)
+        const previousScore = this.userData.wellnessScore || 85;
+        score = Math.round(previousScore * 0.3 + score * 0.7); // 70% new, 30% old
+
+        this.userData.wellnessScore = score;
+
+        // Only push score if it changed
         const lastScore = this.userData.dailyStats.wellnessScores.slice(-1)[0];
-        if (!lastScore || Math.abs(lastScore - this.userData.wellnessScore) > 2) {
-            this.userData.dailyStats.wellnessScores.push(this.userData.wellnessScore);
+        if (!lastScore || Math.abs(lastScore - score) > 1) {
+            this.userData.dailyStats.wellnessScores.push(score);
 
             // Keep only last 100 scores
             if (this.userData.dailyStats.wellnessScores.length > 100) {
@@ -459,7 +561,7 @@ class ScrollBalancePro {
             }
         }
 
-        return this.userData.wellnessScore;
+        return score;
     }
 
     // ===== STATS UPDATE =====
@@ -911,6 +1013,19 @@ class ScrollBalancePro {
                         const goal = this.categorizeRedditPost(post);
                         const isAligned = this.userData.goals.includes(goal);
 
+                        // Get best quality image
+                        let imageUrl = null;
+                        if (post.preview && post.preview.images && post.preview.images[0]) {
+                            // Use preview image (higher quality)
+                            imageUrl = post.preview.images[0].source.url.replace(/&amp;/g, '&');
+                        } else if (post.thumbnail && post.thumbnail.startsWith('http')) {
+                            // Fallback to thumbnail
+                            imageUrl = post.thumbnail;
+                        } else if (post.url && /\.(jpg|jpeg|png|gif|webp)$/i.test(post.url)) {
+                            // Direct image link
+                            imageUrl = post.url;
+                        }
+
                         posts.push({
                             id: post.id,
                             title: post.title,
@@ -918,7 +1033,7 @@ class ScrollBalancePro {
                             author: post.author,
                             subreddit: post.subreddit,
                             url: `https://reddit.com${post.permalink}`,
-                            thumbnail: post.thumbnail && post.thumbnail.startsWith('http') ? post.thumbnail : null,
+                            thumbnail: imageUrl,
                             score: post.score,
                             goal: goal,
                             aligned: isAligned,
@@ -1301,125 +1416,252 @@ class ScrollBalancePro {
     }
 
     // ===== ANALYTICS =====
-    loadAnalytics() {
-        // Clear existing charts to prevent duplicates
-        if (this.usageHeatmapChart) this.usageHeatmapChart.destroy();
-        if (this.timeDistChart) this.timeDistChart.destroy();
-        if (this.moodChartInstance) this.moodChartInstance.destroy();
+    async loadAnalytics() {
+        console.log('Loading analytics page...');
 
-        // Small delay to ensure canvas elements are in DOM
-        setTimeout(() => {
-            this.loadUsageHeatmap();
-            this.loadTimeDistribution();
-            this.loadMoodChart();
-        }, 100);
+        // Clear existing charts to prevent duplicates
+        if (this.usageHeatmapChart) {
+            this.usageHeatmapChart.destroy();
+            this.usageHeatmapChart = null;
+        }
+        if (this.timeDistChart) {
+            this.timeDistChart.destroy();
+            this.timeDistChart = null;
+        }
+        if (this.moodChartInstance) {
+            this.moodChartInstance.destroy();
+            this.moodChartInstance = null;
+        }
+
+        // Wait for page to be visible and DOM to be ready
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+        // Check if Chart.js is loaded
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded');
+            return;
+        }
+
+        // Load all charts
+        this.loadUsageHeatmap();
+        this.loadTimeDistribution();
+        this.loadMoodChart();
+
+        console.log('Analytics charts initialized');
     }
 
     loadUsageHeatmap() {
         const canvas = document.getElementById('usage-heatmap');
-        if (!canvas || typeof Chart === 'undefined') {
-            console.log('Canvas not found or Chart.js not loaded');
+        if (!canvas) {
+            console.error('Usage heatmap canvas not found');
             return;
         }
 
-        const data = this.generateHeatmapData();
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded for heatmap');
+            return;
+        }
 
-        this.usageHeatmapChart = new Chart(canvas, {
-            type: 'bar',
-            data: {
-                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                datasets: [{
-                    label: 'Screen Time (hours)',
-                    data: data,
-                    backgroundColor: '#6366f1'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: '#334155' },
-                        ticks: { color: '#94a3b8' }
+        try {
+            const data = this.generateHeatmapData();
+            console.log('Heatmap data:', data);
+
+            this.usageHeatmapChart = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [{
+                        label: 'Screen Time (hours)',
+                        data: data,
+                        backgroundColor: '#6366f1',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `${context.parsed.y.toFixed(1)} hours`
+                            }
+                        }
                     },
-                    x: {
-                        grid: { color: '#334155' },
-                        ticks: { color: '#94a3b8' }
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8' }
+                        }
                     }
                 }
-            }
-        });
+            });
+
+            console.log('Usage heatmap chart created successfully');
+        } catch (error) {
+            console.error('Failed to create heatmap chart:', error);
+        }
     }
 
     loadTimeDistribution() {
         const canvas = document.getElementById('time-distribution');
-        if (!canvas || typeof Chart === 'undefined') {
-            console.log('Time distribution canvas not found');
+        if (!canvas) {
+            console.error('Time distribution canvas not found');
             return;
         }
 
-        this.timeDistChart = new Chart(canvas, {
-            type: 'pie',
-            data: {
-                labels: ['Social', 'Learning', 'Entertainment', 'Productive'],
-                datasets: [{
-                    data: [35, 25, 25, 15],
-                    backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ec4899']
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: { color: '#94a3b8' }
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded for time distribution');
+            return;
+        }
+
+        try {
+            // Calculate actual distribution based on content ratings
+            const ratings = this.userData.contentRatings;
+            let social = 0, learning = 0, entertainment = 0, productive = 0;
+
+            if (ratings.length > 0) {
+                ratings.forEach(rating => {
+                    if (rating.goal === 'learn') learning++;
+                    else if (rating.goal === 'productivity') productive++;
+                    else if (rating.goal === 'chill') entertainment++;
+                    else social++;
+                });
+            } else {
+                // Default values for new users
+                social = 35;
+                learning = 25;
+                entertainment = 25;
+                productive = 15;
+            }
+
+            this.timeDistChart = new Chart(canvas, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Social', 'Learning', 'Entertainment', 'Productive'],
+                    datasets: [{
+                        data: [social, learning, entertainment, productive],
+                        backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ec4899'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#94a3b8',
+                                padding: 15,
+                                font: { size: 12 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                    return `${context.label}: ${percentage}%`;
+                                }
+                            }
+                        }
                     }
                 }
-            }
-        });
+            });
+
+            console.log('Time distribution chart created successfully');
+        } catch (error) {
+            console.error('Failed to create time distribution chart:', error);
+        }
     }
 
     loadMoodChart() {
         const canvas = document.getElementById('mood-chart');
-        if (!canvas || typeof Chart === 'undefined') {
-            console.log('Mood chart canvas not found');
+        if (!canvas) {
+            console.error('Mood chart canvas not found');
             return;
         }
 
-        this.moodChartInstance = new Chart(canvas, {
-            type: 'line',
-            data: {
-                labels: this.getLast7Days(),
-                datasets: [{
-                    label: 'Mood Score',
-                    data: [70, 75, 80, 78, 85, 88, 90],
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        grid: { color: '#334155' },
-                        ticks: { color: '#94a3b8' }
-                    },
-                    x: {
-                        grid: { color: '#334155' },
-                        ticks: { color: '#94a3b8' }
-                    }
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded for mood chart');
+            return;
+        }
+
+        try {
+            // Get real mood data for last 7 days
+            const moodData = [];
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateKey = date.toDateString();
+
+                // Get moods for this day
+                const dayMoods = this.userData.moodHistory.filter(m => {
+                    return new Date(m.time).toDateString() === dateKey;
+                });
+
+                // Calculate average mood score for the day
+                if (dayMoods.length > 0) {
+                    const avgScore = dayMoods.reduce((sum, m) => sum + (m.score || this.getMoodScore(m.mood)), 0) / dayMoods.length;
+                    moodData.push(Math.round(avgScore));
+                } else {
+                    // No data for this day, use baseline
+                    moodData.push(i === 0 ? 85 : null); // null for missing data, 85 for today
                 }
             }
-        });
+
+            this.moodChartInstance = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: this.getLast7Days(),
+                    datasets: [{
+                        label: 'Mood Score',
+                        data: moodData,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        spanGaps: true // Connect across null values
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `Mood: ${context.parsed.y}/100`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    }
+                }
+            });
+
+            console.log('Mood chart created successfully');
+        } catch (error) {
+            console.error('Failed to create mood chart:', error);
+        }
     }
 
     generateHeatmapData() {
