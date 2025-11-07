@@ -2834,10 +2834,18 @@ class ScrollBalancePro {
     }
 
     triggerOwlAppearance(context, forceShow = false) {
-        if (!forceShow && !this.shouldOwlAppear()) return;
+        console.log('🦉 Trigger owl appearance called:', context, 'forceShow:', forceShow);
+
+        if (!forceShow && !this.shouldOwlAppear()) {
+            console.log('🦉 Owl appearance blocked by shouldOwlAppear()');
+            return;
+        }
 
         const messages = this.getOwlMessages(context);
-        if (messages.length === 0) return;
+        if (messages.length === 0) {
+            console.log('🦉 No messages found for context:', context);
+            return;
+        }
 
         const randomMessage = messages[Math.floor(Math.random() * messages.length)];
         this.showOwl(randomMessage, context);
@@ -2858,6 +2866,8 @@ class ScrollBalancePro {
     }
 
     showOwl(message, context) {
+        console.log('🦉 Showing owl with context:', context, 'message:', message);
+
         // Remove existing owl
         const existing = document.querySelector('.owl-companion');
         if (existing) existing.remove();
@@ -2899,9 +2909,7 @@ class ScrollBalancePro {
         `;
 
         document.body.appendChild(owl);
-
-        // Animate entrance
-        setTimeout(() => owl.classList.add('owl-visible'), 10);
+        console.log('🦉 Owl added to DOM');
 
         // Auto-dismiss after 15 seconds
         setTimeout(() => {
@@ -2970,8 +2978,16 @@ class ScrollBalancePro {
 
     // Context-aware triggers
     checkOwlTriggers() {
+        if (!this.userData.owlEnabled) {
+            console.log('🦉 Owl is disabled');
+            return;
+        }
+
+        console.log('🦉 Checking owl triggers...');
+
         // Low wellness
         if (this.userData.wellnessScore < 60) {
+            console.log('🦉 Low wellness detected:', this.userData.wellnessScore);
             if (Math.random() < 0.3) { // 30% chance
                 this.triggerOwlAppearance('low_wellness');
             }
@@ -2979,6 +2995,7 @@ class ScrollBalancePro {
 
         // Quality streak
         if (this.userData.qualityStreakCurrent >= 7) {
+            console.log('🦉 Quality streak detected:', this.userData.qualityStreakCurrent);
             if (Math.random() < 0.5) { // 50% chance
                 this.triggerOwlAppearance('quality_streak');
             }
@@ -2986,6 +3003,7 @@ class ScrollBalancePro {
 
         // Mindless scrolling
         if (this.userData.mindlessScrollDetected > 3) {
+            console.log('🦉 Mindless scrolling detected:', this.userData.mindlessScrollDetected);
             if (Math.random() < 0.4) { // 40% chance
                 this.triggerOwlAppearance('mindless_scroll');
             }
@@ -2994,6 +3012,7 @@ class ScrollBalancePro {
         // Long session (over 45 minutes)
         const sessionTime = (Date.now() - this.sessionStartTime) / 60000;
         if (sessionTime > 45) {
+            console.log('🦉 Long session detected:', sessionTime, 'minutes');
             if (Math.random() < 0.3) { // 30% chance
                 this.triggerOwlAppearance('long_session');
             }
@@ -3001,6 +3020,7 @@ class ScrollBalancePro {
 
         // Random check-in (10% chance every check)
         if (Math.random() < 0.1) {
+            console.log('🦉 Random check-in triggered');
             this.triggerOwlAppearance('checkin');
         }
     }
