@@ -1,17 +1,29 @@
 // Scroll Balance - Content Script (Injected into social media sites)
+// Wrap in IIFE to prevent conflicts with page scripts
+(function() {
+  'use strict';
 
-console.log('🎯 Scroll Balance active');
-
-class ScrollBalanceOverlay {
-  constructor() {
-    this.sessionStart = Date.now();
-    this.scrollCount = 0;
-    this.lastScrollTime = Date.now();
-    this.contentViewed = 0;
-    this.settings = {};
-
-    this.init();
+  // Check if already injected
+  if (window.__SCROLL_BALANCE_INJECTED__) {
+    console.warn('Scroll Balance already injected');
+    return;
   }
+  window.__SCROLL_BALANCE_INJECTED__ = true;
+
+  console.log('🎯 Scroll Balance active');
+
+  class ScrollBalanceOverlay {
+    constructor() {
+      this.sessionStart = Date.now();
+      this.scrollCount = 0;
+      this.lastScrollTime = Date.now();
+      this.contentViewed = 0;
+      this.settings = {};
+      this.observers = []; // Track observers for cleanup
+      this.namespace = 'sb-' + Math.random().toString(36).substr(2, 9);
+
+      this.init();
+    }
 
   async init() {
     // Load settings
@@ -33,12 +45,33 @@ class ScrollBalanceOverlay {
     // Update stats display
     this.updateStats();
     setInterval(() => this.updateStats(), 10000);
+
+    // Cleanup on page unload
+    this.setupCleanup();
+  }
+
+  setupCleanup() {
+    window.addEventListener('beforeunload', () => {
+      // Disconnect all observers
+      this.observers.forEach(observer => observer.disconnect());
+      this.observers = [];
+      console.log('Scroll Balance cleaned up');
+    });
+  }
+
+  throttle(func, delay) {
+    let timeout = null;
+    return (...args) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(this, args), delay);
+    };
   }
 
   injectOverlay() {
-    // Create floating widget
+    // Create floating widget with unique ID
     const widget = document.createElement('div');
-    widget.id = 'scroll-balance-widget';
+    widget.id = `${this.namespace}-widget`;
+    widget.className = 'scroll-balance-widget-v1';
     widget.innerHTML = `
       <div class="sb-widget-content">
         <div class="sb-widget-header">
@@ -56,6 +89,7 @@ class ScrollBalanceOverlay {
     this.makeDraggable(widget);
 
     document.body.appendChild(widget);
+    this.widgetId = widget.id;
   }
 
   makeDraggable(element) {
@@ -130,51 +164,69 @@ class ScrollBalanceOverlay {
   }
 
   trackTikTok() {
-    // Monitor video container changes
-    const observer = new MutationObserver(() => {
+    let lastCount = 0;
+
+    // Use throttled observer to prevent excessive callbacks
+    const observer = new MutationObserver(this.throttle(() => {
       const videos = document.querySelectorAll('[data-e2e="recommend-list-item-container"]');
-      if (videos.length > this.contentViewed) {
+      if (videos.length > lastCount) {
+        lastCount = videos.length;
         this.contentViewed = videos.length;
         this.recordContentView();
       }
-    });
+    }, 500)); // Throttle to max once per 500ms
 
     observer.observe(document.body, {
       childList: true,
       subtree: true
     });
+
+    // Store for cleanup
+    this.observers.push(observer);
   }
 
   trackInstagram() {
+    let lastCount = 0;
+
     // Monitor article changes (posts/reels)
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver(this.throttle(() => {
       const posts = document.querySelectorAll('article');
-      if (posts.length > this.contentViewed) {
+      if (posts.length > lastCount) {
+        lastCount = posts.length;
         this.contentViewed = posts.length;
         this.recordContentView();
       }
-    });
+    }, 500));
 
     observer.observe(document.body, {
       childList: true,
       subtree: true
     });
+
+    // Store for cleanup
+    this.observers.push(observer);
   }
 
   trackTwitter() {
+    let lastCount = 0;
+
     // Monitor tweet articles
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver(this.throttle(() => {
       const tweets = document.querySelectorAll('article');
-      if (tweets.length > this.contentViewed) {
+      if (tweets.length > lastCount) {
+        lastCount = tweets.length;
         this.contentViewed = tweets.length;
         this.recordContentView();
       }
-    });
+    }, 500));
 
     observer.observe(document.body, {
       childList: true,
       subtree: true
     });
+
+    // Store for cleanup
+    this.observers.push(observer);
   }
 
   recordContentView() {
@@ -245,7 +297,7 @@ class ScrollBalanceOverlay {
     const response = await chrome.runtime.sendMessage({ action: 'getSiteTime' });
     const timeMinutes = Math.floor(response.time / 60);
 
-    const widget = document.getElementById('scroll-balance-widget');
+    const widget = document.getElementById(this.widgetId);
     if (widget) {
       const timeEl = widget.querySelector('.sb-time');
       if (timeEl) {
@@ -278,11 +330,13 @@ class ScrollBalanceOverlay {
   }
 }
 
-// Initialize when page loads
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
+  // Initialize when page loads
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      new ScrollBalanceOverlay();
+    });
+  } else {
     new ScrollBalanceOverlay();
-  });
-} else {
-  new ScrollBalanceOverlay();
-}
+  }
+
+})(); // Close IIFE
