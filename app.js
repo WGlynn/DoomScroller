@@ -1419,6 +1419,10 @@ class ScrollBalancePro {
                             imageUrl = post.url;
                         }
 
+                        // Generate simulated vote counts for Reddit posts too
+                        const baseValuable = isAligned ? Math.floor(Math.random() * 400) + 150 : Math.floor(Math.random() * 200) + 75;
+                        const baseBrainrot = isAligned ? Math.floor(Math.random() * 60) + 15 : Math.floor(Math.random() * 120) + 40;
+
                         posts.push({
                             id: post.id,
                             title: post.title,
@@ -1430,7 +1434,9 @@ class ScrollBalancePro {
                             score: post.score,
                             goal: goal,
                             aligned: isAligned,
-                            type: 'reddit'
+                            type: 'reddit',
+                            valuableVotes: baseValuable,
+                            brainrotVotes: baseBrainrot
                         });
                     });
                 }
@@ -1597,7 +1603,9 @@ class ScrollBalancePro {
                  data-goal="${sanitizeHTML(item.goal)}"
                  data-aligned="${item.aligned}"
                  data-url="${safeUrl}"
-                 data-expected-time="${expectedSeconds}">
+                 data-expected-time="${expectedSeconds}"
+                 data-valuable-votes="${item.valuableVotes}"
+                 data-brainrot-votes="${item.brainrotVotes}">
                 <div class="content-header">
                     <div class="content-avatar">${emoji}</div>
                     <div class="content-info">
@@ -1701,6 +1709,11 @@ class ScrollBalancePro {
             const topic = contentType.topics[Math.floor(Math.random() * contentType.topics.length)];
             const isAligned = this.userData.goals.includes(contentType.goal);
 
+            // Generate simulated vote counts
+            // Aligned content tends to have more valuable votes
+            const baseValuable = isAligned ? Math.floor(Math.random() * 300) + 100 : Math.floor(Math.random() * 150) + 50;
+            const baseBrainrot = isAligned ? Math.floor(Math.random() * 50) + 10 : Math.floor(Math.random() * 100) + 30;
+
             content.push({
                 id: `content-${Date.now()}-${i}`,
                 emoji: contentType.emoji,
@@ -1708,7 +1721,9 @@ class ScrollBalancePro {
                 topic: topic,
                 aligned: isAligned,
                 title: this.generateContentTitle(contentType.goal, topic),
-                username: this.generateUsername()
+                username: this.generateUsername(),
+                valuableVotes: baseValuable,
+                brainrotVotes: baseBrainrot
             });
         }
 
@@ -1781,7 +1796,9 @@ class ScrollBalancePro {
                  data-id="${item.id}"
                  data-goal="${item.goal}"
                  data-aligned="${item.aligned}"
-                 data-expected-time="${expectedSeconds}">
+                 data-expected-time="${expectedSeconds}"
+                 data-valuable-votes="${item.valuableVotes}"
+                 data-brainrot-votes="${item.brainrotVotes}">
                 <div class="content-header">
                     <div class="content-avatar">${item.emoji}</div>
                     <div class="content-info">
@@ -1917,30 +1934,71 @@ class ScrollBalancePro {
             this.showXPAnimation(card, xpGained, multiplier, engagementRatio);
         }
 
-        // Visual feedback
-        card.style.transform = 'translateX(-100%)';
-        card.style.opacity = '0';
-        card.style.transition = 'all 0.3s ease';
+        // Show collective voting results AFTER user votes
+        const valuableVotes = parseInt(card.dataset.valuableVotes);
+        const brainrotVotes = parseInt(card.dataset.brainrotVotes);
 
+        // Increment based on user's vote
+        const newValuable = rating === 'valuable' ? valuableVotes + 1 : valuableVotes;
+        const newBrainrot = rating === 'skip' ? brainrotVotes + 1 : brainrotVotes;
+        const totalVotes = newValuable + newBrainrot;
+        const valuablePercentage = Math.round((newValuable / totalVotes) * 100);
+
+        // Update engagement indicator to show voting results
+        const engagementIndicator = card.querySelector('.engagement-indicator');
+        if (engagementIndicator) {
+            const voteEmoji = rating === 'valuable' ? '👍' : '👎';
+            engagementIndicator.innerHTML = `
+                <div style="text-align: center; padding: var(--spacing-md);">
+                    <div style="font-size: 1.2rem; font-weight: 600; color: var(--text-primary); margin-bottom: var(--spacing-sm);">
+                        ${voteEmoji} ${valuablePercentage}% found this valuable
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                        Based on ${totalVotes.toLocaleString()} community votes
+                    </div>
+                </div>
+            `;
+        }
+
+        // Disable buttons after voting
+        const valuableBtn = card.querySelector('.action-btn.valuable');
+        const skipBtn = card.querySelector('.action-btn.skip');
+        if (valuableBtn) valuableBtn.disabled = true;
+        if (skipBtn) skipBtn.disabled = true;
+
+        // Wait 2 seconds to show voting results before removing card
         setTimeout(() => {
-            card.remove();
-            // Load one more item to replace it
-            const newContent = this.generateFeedContent(1);
-            const container = document.getElementById('smart-feed');
-            if (container && newContent.length > 0) {
-                const newCard = this.createContentCard(newContent[0]);
-                container.insertAdjacentHTML('beforeend', newCard);
+            // Visual feedback
+            card.style.transform = 'translateX(-100%)';
+            card.style.opacity = '0';
+            card.style.transition = 'all 0.3s ease';
 
-                // Add event listeners to new card
-                const addedCard = container.lastElementChild;
-                addedCard.querySelector('.action-btn.valuable')?.addEventListener('click', () => {
-                    this.rateContent(addedCard, 'valuable');
-                });
-                addedCard.querySelector('.action-btn.skip')?.addEventListener('click', () => {
-                    this.rateContent(addedCard, 'skip');
-                });
-            }
-        }, 300);
+            setTimeout(() => {
+                card.remove();
+                // Load one more item to replace it
+                const newContent = this.generateFeedContent(1);
+                const container = document.getElementById('smart-feed');
+                if (container && newContent.length > 0) {
+                    const newCard = this.createContentCard(newContent[0]);
+                    container.insertAdjacentHTML('beforeend', newCard);
+
+                    // Add event listeners to new card
+                    const addedCard = container.lastElementChild;
+                    addedCard.querySelector('.action-btn.valuable')?.addEventListener('click', () => {
+                        this.rateContent(addedCard, 'valuable');
+                    });
+                    addedCard.querySelector('.action-btn.skip')?.addEventListener('click', () => {
+                        this.rateContent(addedCard, 'skip');
+                    });
+
+                    // Start observing the new card for engagement tracking
+                    if (this.engagementObserver) {
+                        addedCard.dataset.isActive = 'false';
+                        this.engagementObserver.observe(addedCard);
+                    }
+                }
+            }, 300);
+        }, 2000);
 
         // Update stats
         this.userData.dailyStats.contentViewed++;
