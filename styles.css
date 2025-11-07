@@ -1799,6 +1799,369 @@ kbd {
     border-left: 3px solid var(--primary);
 }
 
+/* Owl Chatbot Companion */
+.owl-companion {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 10000;
+    animation: owlSlideIn 0.5s ease-out;
+}
+
+@keyframes owlSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(100px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.owl-companion.owl-exit {
+    animation: owlSlideOut 0.3s ease-in forwards;
+}
+
+@keyframes owlSlideOut {
+    to {
+        opacity: 0;
+        transform: translateY(100px);
+    }
+}
+
+.owl-container {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    gap: var(--spacing-md);
+    filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.3));
+}
+
+/* Owl Character */
+.owl-character {
+    position: relative;
+    width: 80px;
+    height: 100px;
+    animation: owlBob 3s ease-in-out infinite;
+}
+
+@keyframes owlBob {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-8px);
+    }
+}
+
+.owl-body {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #8b7355 0%, #6b5844 100%);
+    border-radius: 50% 50% 40% 40%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.owl-face {
+    position: relative;
+    width: 60px;
+    height: 50px;
+}
+
+/* Owl Eyes */
+.owl-eyes {
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+}
+
+.owl-eye {
+    width: 24px;
+    height: 24px;
+    background: white;
+    border-radius: 50%;
+    position: relative;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.owl-pupil {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: #2c1810;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    transition: all 0.1s ease;
+}
+
+/* Owl Beak */
+.owl-beak {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 10px solid #f59e0b;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+/* Owl Wings */
+.owl-wing {
+    position: absolute;
+    width: 25px;
+    height: 40px;
+    background: linear-gradient(135deg, #8b7355 0%, #6b5844 100%);
+    border-radius: 50% 0 50% 50%;
+    top: 20px;
+}
+
+.owl-wing.left {
+    left: -10px;
+    transform: rotate(-20deg);
+    animation: wingFlap 2s ease-in-out infinite;
+}
+
+.owl-wing.right {
+    right: -10px;
+    transform: rotate(20deg) scaleX(-1);
+    animation: wingFlap 2s ease-in-out infinite;
+    animation-delay: 0.1s;
+}
+
+@keyframes wingFlap {
+    0%, 100% {
+        transform: rotate(-20deg);
+    }
+    50% {
+        transform: rotate(-30deg);
+    }
+}
+
+.owl-wing.right {
+    animation: wingFlapRight 2s ease-in-out infinite;
+    animation-delay: 0.1s;
+}
+
+@keyframes wingFlapRight {
+    0%, 100% {
+        transform: rotate(20deg) scaleX(-1);
+    }
+    50% {
+        transform: rotate(30deg) scaleX(-1);
+    }
+}
+
+/* Owl Feet */
+.owl-feet {
+    position: absolute;
+    bottom: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+}
+
+.owl-foot {
+    width: 12px;
+    height: 15px;
+    background: #f59e0b;
+    border-radius: 0 0 5px 5px;
+    position: relative;
+}
+
+.owl-foot::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: -3px;
+    width: 8px;
+    height: 3px;
+    background: #f59e0b;
+    border-radius: 0 0 0 3px;
+}
+
+.owl-foot::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    right: -3px;
+    width: 8px;
+    height: 3px;
+    background: #f59e0b;
+    border-radius: 0 0 3px 0;
+}
+
+/* Speech Bubble */
+.owl-speech-bubble {
+    position: relative;
+    background: linear-gradient(135deg, var(--bg-card), var(--bg-secondary));
+    border: 2px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-lg);
+    max-width: 320px;
+    min-width: 280px;
+    box-shadow: var(--shadow-lg);
+    animation: bubblePop 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes bubblePop {
+    0% {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.owl-speech-bubble::before {
+    content: '';
+    position: absolute;
+    left: -12px;
+    bottom: 30px;
+    width: 0;
+    height: 0;
+    border-top: 10px solid transparent;
+    border-bottom: 10px solid transparent;
+    border-right: 12px solid var(--border);
+}
+
+.owl-speech-bubble::after {
+    content: '';
+    position: absolute;
+    left: -9px;
+    bottom: 31px;
+    width: 0;
+    height: 0;
+    border-top: 9px solid transparent;
+    border-bottom: 9px solid transparent;
+    border-right: 10px solid var(--bg-card);
+}
+
+.owl-message {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin-bottom: var(--spacing-md);
+}
+
+.owl-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    justify-content: flex-end;
+}
+
+.owl-btn {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all var(--transition-base);
+    font-family: inherit;
+}
+
+.owl-btn:hover {
+    background: var(--bg-primary);
+    border-color: var(--primary);
+    transform: translateY(-1px);
+}
+
+.owl-btn.owl-dismiss {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.owl-btn.owl-dismiss:hover {
+    background: var(--primary-dark);
+}
+
+.owl-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--text-secondary);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.2rem;
+    line-height: 1;
+    transition: all var(--transition-base);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.owl-close:hover {
+    background: rgba(0, 0, 0, 0.2);
+    color: var(--text-primary);
+}
+
+/* Owl Temperament Selector in Settings */
+.temperament-selector {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-md);
+}
+
+.temperament-option {
+    padding: var(--spacing-lg);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    background: var(--bg-secondary);
+}
+
+.temperament-option:hover {
+    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.temperament-option.selected {
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.temperament-option .temperament-emoji {
+    font-size: 2rem;
+    margin-bottom: var(--spacing-sm);
+    display: block;
+}
+
+.temperament-option .temperament-name {
+    font-weight: 600;
+    margin-bottom: var(--spacing-xs);
+    display: block;
+}
+
+.temperament-option .temperament-description {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    display: block;
+}
+
 .insight-achievement {
     border-left: 3px solid #f59e0b;
     background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(251, 191, 36, 0.05));

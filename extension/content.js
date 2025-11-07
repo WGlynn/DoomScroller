@@ -26,12 +26,18 @@
     }
 
   async init() {
+    console.log('🎯 Scroll Balance: Initializing...');
+
     // Load settings
     const result = await chrome.storage.local.get(['settings']);
     this.settings = result.settings || {};
+    console.log('📋 Settings loaded:', this.settings);
+
+    // Note: CSS is auto-injected by manifest.json content_scripts
 
     // Inject overlay UI
     this.injectOverlay();
+    console.log('✅ Widget injected');
 
     // Track scrolling
     this.trackScrolling();
@@ -48,6 +54,8 @@
 
     // Cleanup on page unload
     this.setupCleanup();
+
+    console.log('🚀 Scroll Balance: Fully initialized');
   }
 
   setupCleanup() {
@@ -68,6 +76,8 @@
   }
 
   injectOverlay() {
+    console.log('🎨 Creating widget overlay...');
+
     // Create enhanced floating widget with unique ID
     const widget = document.createElement('div');
     widget.id = `${this.namespace}-widget`;
@@ -76,6 +86,9 @@
     const platform = this.detectPlatform();
     const platformIcon = this.getPlatformIcon(platform);
     const platformName = this.getPlatformName(platform);
+
+    console.log(`📍 Platform detected: ${platform} (${platformName})`);
+    console.log(`🆔 Widget ID: ${widget.id}`);
 
     widget.innerHTML = `
       <div class="sb-widget-content">
@@ -135,6 +148,25 @@
     document.body.appendChild(widget);
     this.widgetId = widget.id;
     this.isMinimized = false;
+
+    console.log('✅ Widget appended to body');
+    console.log('📦 Widget element:', widget);
+    console.log('🎨 Widget classes:', widget.className);
+
+    // Verify widget is in DOM
+    setTimeout(() => {
+      const foundWidget = document.getElementById(widget.id);
+      if (foundWidget) {
+        console.log('✅ Widget confirmed in DOM');
+        const styles = window.getComputedStyle(foundWidget);
+        console.log('🎨 Widget position:', styles.position);
+        console.log('🎨 Widget display:', styles.display);
+        console.log('🎨 Widget visibility:', styles.visibility);
+        console.log('🎨 Widget z-index:', styles.zIndex);
+      } else {
+        console.error('❌ Widget NOT found in DOM!');
+      }
+    }, 100);
   }
 
   setupWidgetListeners(widget) {
