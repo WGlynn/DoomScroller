@@ -35,6 +35,11 @@ class ScrollBalancePro {
         this.startTracking();
         this.loadGoalsProgress();
         this.loadActivityTimeline();
+
+        // Preload analytics charts if we're on that page
+        if (document.getElementById('analytics-page')?.classList.contains('active')) {
+            setTimeout(() => this.loadAnalytics(), 100);
+        }
     }
 
     // ===== DATA MANAGEMENT =====
@@ -376,12 +381,186 @@ class ScrollBalancePro {
         const container = document.getElementById('smart-feed');
         if (!container) return;
 
+        // Show loading state
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading real content...</div>';
+
         // Setup filter buttons
         this.setupFeedFilters();
 
         // Load initial content
         this.currentFeedFilter = 'all';
-        this.renderFeedContent();
+        this.fetchRealContent();
+    }
+
+    async fetchRealContent() {
+        const container = document.getElementById('smart-feed');
+        if (!container) return;
+
+        try {
+            // Fetch from multiple subreddits based on goals
+            const subreddits = this.getSubredditsForGoals();
+            const posts = await this.fetchRedditPosts(subreddits);
+
+            if (posts.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">No content available. Try changing filters.</div>';
+                return;
+            }
+
+            this.currentFeedContent = posts;
+            this.renderRealFeedContent();
+        } catch (error) {
+            console.error('Error fetching content:', error);
+            container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--error);">Failed to load content. Please try again.</div>';
+        }
+    }
+
+    getSubredditsForGoals() {
+        const subredditMap = {
+            'learn': ['todayilearned', 'explainlikeimfive', 'science', 'AskScience'],
+            'chill': ['natureporn', 'cozyplaces', 'mademesmile', 'wholesomememes'],
+            'reduce-anxiety': ['meditation', 'mindfulness', 'decidingtobebetter'],
+            'productivity': ['productivity', 'getdisciplined', 'lifeprotips'],
+            'sleep': ['sleep', 'bedtime']
+        };
+
+        let subreddits = [];
+
+        if (this.currentFeedFilter === 'goal-aligned' && this.userData.goals.length > 0) {
+            this.userData.goals.forEach(goal => {
+                if (subredditMap[goal]) {
+                    subreddits.push(...subredditMap[goal]);
+                }
+            });
+        } else if (this.currentFeedFilter === 'educational') {
+            subreddits = [...subredditMap['learn'], ...subredditMap['productivity']];
+        } else {
+            // All - mix from all categories
+            Object.values(subredditMap).forEach(subs => {
+                subreddits.push(...subs);
+            });
+        }
+
+        return subreddits.slice(0, 5); // Limit to 5 subreddits
+    }
+
+    async fetchRedditPosts(subreddits) {
+        const posts = [];
+
+        for (const subreddit of subreddits.slice(0, 3)) { // Only fetch from 3 to be fast
+            try {
+                const response = await fetch(`https://www.reddit.com/r/${subreddit}/hot.json?limit=5`);
+                const data = await response.json();
+
+                if (data.data && data.data.children) {
+                    data.data.children.forEach(child => {
+                        const post = child.data;
+
+                        // Skip if NSFW or no content
+                        if (post.over_18 || (!post.title && !post.selftext)) return;
+
+                        // Determine goal alignment
+                        const goal = this.categorizeRedditPost(post);
+                        const isAligned = this.userData.goals.includes(goal);
+
+                        posts.push({
+                            id: post.id,
+                            title: post.title,
+                            content: post.selftext ? post.selftext.substring(0, 300) : '',
+                            author: post.author,
+                            subreddit: post.subreddit,
+                            url: `https://reddit.com${post.permalink}`,
+                            thumbnail: post.thumbnail && post.thumbnail.startsWith('http') ? post.thumbnail : null,
+                            score: post.score,
+                            goal: goal,
+                            aligned: isAligned,
+                            type: 'reddit'
+                        });
+                    });
+                }
+            } catch (error) {
+                console.error(`Error fetching r/${subreddit}:`, error);
+            }
+        }
+
+        return posts;
+    }
+
+    categorizeRedditPost(post) {
+        const subreddit = post.subreddit.toLowerCase();
+        const title = post.title.toLowerCase();
+
+        if (subreddit.includes('learn') || subreddit.includes('science') || subreddit.includes('explain')) {
+            return 'learn';
+        } else if (subreddit.includes('meditation') || subreddit.includes('mindfulness') || subreddit.includes('anxiety')) {
+            return 'reduce-anxiety';
+        } else if (subreddit.includes('productivity') || subreddit.includes('discipline')) {
+            return 'productivity';
+        } else if (subreddit.includes('sleep')) {
+            return 'sleep';
+        } else {
+            return 'chill';
+        }
+    }
+
+    renderRealFeedContent() {
+        const container = document.getElementById('smart-feed');
+        if (!container || !this.currentFeedContent) return;
+
+        container.innerHTML = this.currentFeedContent.map(item => this.createRealContentCard(item)).join('');
+
+        // Add event listeners
+        container.querySelectorAll('.content-card').forEach(card => {
+            card.querySelector('.action-btn.valuable')?.addEventListener('click', () => {
+                this.rateContent(card, 'valuable');
+            });
+            card.querySelector('.action-btn.skip')?.addEventListener('click', () => {
+                this.rateContent(card, 'skip');
+            });
+            card.querySelector('.action-btn.view')?.addEventListener('click', () => {
+                const url = card.dataset.url;
+                if (url) window.open(url, '_blank');
+            });
+        });
+    }
+
+    createRealContentCard(item) {
+        const goalEmojis = {
+            'learn': '🧠',
+            'chill': '😌',
+            'reduce-anxiety': '🧘',
+            'productivity': '⚡',
+            'sleep': '😴'
+        };
+
+        const emoji = goalEmojis[item.goal] || '📱';
+        const alignedBadge = item.aligned ? '<span class="tag" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">✓ Goal Aligned</span>' : '';
+
+        return `
+            <div class="content-card" data-id="${item.id}" data-goal="${item.goal}" data-aligned="${item.aligned}" data-url="${item.url}">
+                <div class="content-header">
+                    <div class="content-avatar">${emoji}</div>
+                    <div class="content-info">
+                        <div class="content-username">u/${item.author}</div>
+                        <div class="content-goal">r/${item.subreddit}</div>
+                    </div>
+                </div>
+                <div class="content-body">
+                    ${item.thumbnail ? `<img src="${item.thumbnail}" class="content-image" style="width: 100%; height: 300px; object-fit: cover; border-radius: var(--radius-lg); margin-bottom: var(--spacing-md);" />` : `<div class="content-media">${emoji}</div>`}
+                    <div class="content-text"><strong>${item.title}</strong></div>
+                    ${item.content ? `<div style="font-size: 0.9rem; color: var(--text-secondary); margin-top: var(--spacing-sm);">${item.content}...</div>` : ''}
+                    <div class="content-tags">
+                        <span class="tag">#${item.goal.replace('-', '')}</span>
+                        <span class="tag">👍 ${item.score}</span>
+                        ${alignedBadge}
+                    </div>
+                </div>
+                <div class="content-actions">
+                    <button class="action-btn valuable">👍 Valuable</button>
+                    <button class="action-btn skip">👎 Skip</button>
+                    <button class="action-btn view" style="background: rgba(99, 102, 241, 0.1); border-color: var(--primary); color: var(--primary);">🔗 View</button>
+                </div>
+            </div>
+        `;
     }
 
     setupFeedFilters() {
@@ -395,7 +574,7 @@ class ScrollBalancePro {
                 // Filter content
                 const filter = btn.textContent.toLowerCase().trim();
                 this.currentFeedFilter = filter;
-                this.renderFeedContent();
+                this.fetchRealContent();
             });
         });
     }
@@ -665,18 +844,29 @@ class ScrollBalancePro {
 
     // ===== ANALYTICS =====
     loadAnalytics() {
-        this.loadUsageHeatmap();
-        this.loadTimeDistribution();
-        this.loadMoodChart();
+        // Clear existing charts to prevent duplicates
+        if (this.usageHeatmapChart) this.usageHeatmapChart.destroy();
+        if (this.timeDistChart) this.timeDistChart.destroy();
+        if (this.moodChartInstance) this.moodChartInstance.destroy();
+
+        // Small delay to ensure canvas elements are in DOM
+        setTimeout(() => {
+            this.loadUsageHeatmap();
+            this.loadTimeDistribution();
+            this.loadMoodChart();
+        }, 100);
     }
 
     loadUsageHeatmap() {
         const canvas = document.getElementById('usage-heatmap');
-        if (!canvas || typeof Chart === 'undefined') return;
+        if (!canvas || typeof Chart === 'undefined') {
+            console.log('Canvas not found or Chart.js not loaded');
+            return;
+        }
 
         const data = this.generateHeatmapData();
 
-        new Chart(canvas, {
+        this.usageHeatmapChart = new Chart(canvas, {
             type: 'bar',
             data: {
                 labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
@@ -707,9 +897,12 @@ class ScrollBalancePro {
 
     loadTimeDistribution() {
         const canvas = document.getElementById('time-distribution');
-        if (!canvas || typeof Chart === 'undefined') return;
+        if (!canvas || typeof Chart === 'undefined') {
+            console.log('Time distribution canvas not found');
+            return;
+        }
 
-        new Chart(canvas, {
+        this.timeDistChart = new Chart(canvas, {
             type: 'pie',
             data: {
                 labels: ['Social', 'Learning', 'Entertainment', 'Productive'],
@@ -733,9 +926,12 @@ class ScrollBalancePro {
 
     loadMoodChart() {
         const canvas = document.getElementById('mood-chart');
-        if (!canvas || typeof Chart === 'undefined') return;
+        if (!canvas || typeof Chart === 'undefined') {
+            console.log('Mood chart canvas not found');
+            return;
+        }
 
-        new Chart(canvas, {
+        this.moodChartInstance = new Chart(canvas, {
             type: 'line',
             data: {
                 labels: this.getLast7Days(),
