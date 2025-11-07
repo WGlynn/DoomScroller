@@ -43,7 +43,34 @@ class ScrollBalancePro {
             moodHistory: [],
             activityHistory: [],
             contentRatings: [],
-            dailyStats: this.loadDailyStats()
+            dailyStats: this.loadDailyStats(),
+
+            // NEW: Achievement & Progression
+            achievements: [],
+            unlockedBadges: [],
+            dailyChallenge: null,
+            challengeProgress: 0,
+            totalContentRated: 0,
+            totalValuableContent: 0,
+
+            // NEW: Behavioral Tracking
+            sessionRatings: [], // Current session ratings
+            lastNudgeTime: 0,
+            mindlessScrollDetected: 0,
+            qualityStreakCurrent: 0, // Consecutive valuable ratings
+            qualityStreakBest: 0,
+
+            // NEW: Content Memory & Learning
+            contentSignatures: new Map(), // Remember rated content
+            categoryPreferences: {}, // Learn what user likes
+
+            // NEW: Time Pattern Data
+            hourlyEngagement: Array(24).fill(null).map(() => ({
+                ratings: 0,
+                valuable: 0,
+                aligned: 0,
+                skip: 0
+            }))
         };
 
         // Charts
@@ -72,6 +99,11 @@ class ScrollBalancePro {
         // Historical data for charts
         this.historicalData = this.loadHistoricalData();
 
+        // Session tracking for live coaching
+        this.sessionStartTime = Date.now();
+        this.sessionAlignedCount = 0;
+        this.lastCoachingMessage = null;
+
         this.init();
     }
 
@@ -85,11 +117,268 @@ class ScrollBalancePro {
         this.startTracking();
         this.loadGoalsProgress();
         this.loadActivityTimeline();
+        this.generateDailyChallenge();
+        this.checkAchievements();
 
         // Preload analytics charts if we're on that page
         if (document.getElementById('analytics-page')?.classList.contains('active')) {
             setTimeout(() => this.loadAnalytics(), 100);
         }
+    }
+
+    // ===== ACHIEVEMENTS & PROGRESSION SYSTEM =====
+    getAchievementDefinitions() {
+        return [
+            {
+                id: 'first_rating',
+                name: 'First Steps',
+                description: 'Rate your first piece of content',
+                icon: '🌱',
+                condition: () => this.userData.totalContentRated >= 1,
+                xpReward: 50
+            },
+            {
+                id: 'quality_curator_10',
+                name: 'Quality Curator',
+                description: 'Rate 10 pieces of valuable content',
+                icon: '⭐',
+                condition: () => this.userData.totalValuableContent >= 10,
+                xpReward: 100
+            },
+            {
+                id: 'quality_curator_50',
+                name: 'Master Curator',
+                description: 'Rate 50 pieces of valuable content',
+                icon: '🌟',
+                condition: () => this.userData.totalValuableContent >= 50,
+                xpReward: 250
+            },
+            {
+                id: 'streak_7',
+                name: 'Week Warrior',
+                description: 'Maintain a 7-day streak',
+                icon: '🔥',
+                condition: () => this.userData.streak >= 7,
+                xpReward: 200
+            },
+            {
+                id: 'streak_30',
+                name: 'Month Master',
+                description: 'Maintain a 30-day streak',
+                icon: '💎',
+                condition: () => this.userData.streak >= 30,
+                xpReward: 500
+            },
+            {
+                id: 'quality_streak_5',
+                name: 'On a Roll',
+                description: 'Rate 5 valuable items in a row',
+                icon: '🎯',
+                condition: () => this.userData.qualityStreakBest >= 5,
+                xpReward: 150
+            },
+            {
+                id: 'quality_streak_10',
+                name: 'Unstoppable',
+                description: 'Rate 10 valuable items in a row',
+                icon: '🚀',
+                condition: () => this.userData.qualityStreakBest >= 10,
+                xpReward: 300
+            },
+            {
+                id: 'level_5',
+                name: 'Intermediate',
+                description: 'Reach level 5',
+                icon: '📈',
+                condition: () => this.userData.level >= 5,
+                xpReward: 100
+            },
+            {
+                id: 'level_10',
+                name: 'Advanced User',
+                description: 'Reach level 10',
+                icon: '🏆',
+                condition: () => this.userData.level >= 10,
+                xpReward: 300
+            },
+            {
+                id: 'wellness_80',
+                name: 'Mindful Master',
+                description: 'Achieve 80+ wellness score',
+                icon: '🧘',
+                condition: () => this.userData.wellnessScore >= 80,
+                xpReward: 150
+            },
+            {
+                id: 'wellness_90',
+                name: 'Zen Master',
+                description: 'Achieve 90+ wellness score',
+                icon: '✨',
+                condition: () => this.userData.wellnessScore >= 90,
+                xpReward: 350
+            },
+            {
+                id: 'daily_challenge_1',
+                name: 'Challenge Accepted',
+                description: 'Complete your first daily challenge',
+                icon: '🎮',
+                condition: () => this.userData.achievements.filter(a => a.includes('daily_complete')).length >= 1,
+                xpReward: 100
+            },
+            {
+                id: 'alignment_master',
+                name: 'Alignment Master',
+                description: 'Maintain 90% goal alignment',
+                icon: '🎪',
+                condition: () => {
+                    const recent = this.userData.contentRatings.slice(-20);
+                    if (recent.length < 10) return false;
+                    const aligned = recent.filter(r => r.aligned).length;
+                    return (aligned / recent.length) >= 0.9;
+                },
+                xpReward: 400
+            }
+        ];
+    }
+
+    checkAchievements() {
+        const definitions = this.getAchievementDefinitions();
+        let newAchievements = [];
+
+        definitions.forEach(achievement => {
+            // Skip if already unlocked
+            if (this.userData.achievements.includes(achievement.id)) return;
+
+            // Check condition
+            if (achievement.condition()) {
+                this.userData.achievements.push(achievement.id);
+                this.userData.xp += achievement.xpReward;
+                newAchievements.push(achievement);
+
+                // Track as activity
+                this.addActivity('achievement', `🏆 Unlocked: ${achievement.name}`, new Date());
+            }
+        });
+
+        // Show celebration if new achievements
+        if (newAchievements.length > 0) {
+            this.showAchievementNotification(newAchievements);
+            this.checkLevelUp();
+            this.saveData();
+        }
+    }
+
+    showAchievementNotification(achievements) {
+        achievements.forEach((achievement, index) => {
+            setTimeout(() => {
+                this.showToast(`${achievement.icon} ${achievement.name}`, achievement.description, 'achievement');
+            }, index * 500);
+        });
+    }
+
+    generateDailyChallenge() {
+        const today = new Date().toDateString();
+
+        // Check if we already have today's challenge
+        if (this.userData.dailyChallenge && this.userData.dailyChallenge.date === today) {
+            return;
+        }
+
+        // Generate new challenge
+        const challenges = [
+            {
+                id: 'rate_10',
+                name: 'Rate 10 items',
+                description: 'Rate at least 10 pieces of content today',
+                target: 10,
+                progress: 0,
+                type: 'ratings',
+                xpReward: 100
+            },
+            {
+                id: 'valuable_7',
+                name: 'Find 7 gems',
+                description: 'Find and rate 7 valuable pieces of content',
+                target: 7,
+                progress: 0,
+                type: 'valuable',
+                xpReward: 150
+            },
+            {
+                id: 'alignment_80',
+                name: '80% Alignment',
+                description: 'Maintain at least 80% goal alignment today',
+                target: 80,
+                progress: 0,
+                type: 'alignment',
+                xpReward: 120
+            },
+            {
+                id: 'mindful_session',
+                name: 'Mindful Session',
+                description: 'Complete a session with 100% valuable ratings',
+                target: 5,
+                progress: 0,
+                type: 'perfect_session',
+                xpReward: 200
+            }
+        ];
+
+        // Pick random challenge
+        const challenge = challenges[Math.floor(Math.random() * challenges.length)];
+        challenge.date = today;
+
+        this.userData.dailyChallenge = challenge;
+        this.userData.challengeProgress = 0;
+        this.saveData();
+    }
+
+    updateDailyChallengeProgress() {
+        if (!this.userData.dailyChallenge) return;
+
+        const challenge = this.userData.dailyChallenge;
+        const today = new Date().toDateString();
+
+        // Reset if it's a new day
+        if (challenge.date !== today) {
+            this.generateDailyChallenge();
+            return;
+        }
+
+        // Calculate progress based on challenge type
+        let progress = 0;
+        const todayRatings = this.userData.contentRatings.filter(r => {
+            return new Date(r.timestamp).toDateString() === today;
+        });
+
+        switch(challenge.type) {
+            case 'ratings':
+                progress = todayRatings.length;
+                break;
+            case 'valuable':
+                progress = todayRatings.filter(r => r.rating === 'valuable').length;
+                break;
+            case 'alignment':
+                const aligned = todayRatings.filter(r => r.aligned).length;
+                progress = todayRatings.length > 0 ? Math.round((aligned / todayRatings.length) * 100) : 0;
+                break;
+            case 'perfect_session':
+                const valuableCount = todayRatings.filter(r => r.rating === 'valuable').length;
+                progress = valuableCount;
+                break;
+        }
+
+        challenge.progress = progress;
+
+        // Check if completed
+        if (progress >= challenge.target && !this.userData.achievements.includes(`daily_complete_${challenge.date}`)) {
+            this.userData.achievements.push(`daily_complete_${challenge.date}`);
+            this.userData.xp += challenge.xpReward;
+            this.showToast('🎉 Daily Challenge Complete!', `+${challenge.xpReward} XP`, 'success');
+            this.checkAchievements();
+        }
+
+        this.saveData();
     }
 
     setupKeyboardShortcuts() {
@@ -575,8 +864,9 @@ class ScrollBalancePro {
         const minutes = Math.floor((this.userData.screenTime % 3600) / 60);
         document.getElementById('screen-time').textContent = `${hours}h ${minutes}m`;
 
-        // Update XP
+        // Update XP with level progression
         document.getElementById('total-xp').textContent = this.userData.xp.toLocaleString();
+        this.updateLevelProgress();
 
         // Update streak
         document.getElementById('streak').textContent = `${this.userData.streak} days`;
@@ -584,10 +874,98 @@ class ScrollBalancePro {
         // Update sidebar level
         document.getElementById('sidebar-level').textContent = this.userData.level;
 
+        // Update achievements
+        this.loadAchievementsBadges();
+
+        // Update daily challenge
+        this.loadDailyChallengeCard();
+
         // Save data
         this.saveData();
         this.saveDailyStats();
         this.saveHistoricalData();
+    }
+
+    updateLevelProgress() {
+        const xpForNextLevel = this.getXPForLevel(this.userData.level + 1);
+        const xpForCurrentLevel = this.getXPForLevel(this.userData.level);
+        const xpIntoLevel = this.userData.xp - xpForCurrentLevel;
+        const xpNeeded = xpForNextLevel - xpForCurrentLevel;
+        const progress = Math.min((xpIntoLevel / xpNeeded) * 100, 100);
+
+        const progressBar = document.querySelector('.level-progress-bar');
+        if (progressBar) {
+            progressBar.style.width = `${progress}%`;
+        }
+
+        const progressText = document.querySelector('.level-progress-text');
+        if (progressText) {
+            progressText.textContent = `${xpIntoLevel}/${xpNeeded} XP to Level ${this.userData.level + 1}`;
+        }
+    }
+
+    getXPForLevel(level) {
+        // Exponential XP curve: Level 2 = 100, Level 3 = 250, Level 4 = 500, etc.
+        return Math.floor(100 * Math.pow(level - 1, 1.5));
+    }
+
+    loadAchievementsBadges() {
+        const container = document.querySelector('.achievements-showcase');
+        if (!container) return;
+
+        const definitions = this.getAchievementDefinitions();
+        const recent = this.userData.achievements.slice(-4).reverse();
+
+        if (recent.length === 0) {
+            container.innerHTML = '<p class="no-achievements">Complete actions to unlock achievements!</p>';
+            return;
+        }
+
+        container.innerHTML = recent.map(achievementId => {
+            const achievement = definitions.find(a => a.id === achievementId);
+            if (!achievement) return '';
+
+            return `
+                <div class="achievement-badge">
+                    <div class="badge-icon">${achievement.icon}</div>
+                    <div class="badge-info">
+                        <div class="badge-name">${achievement.name}</div>
+                        <div class="badge-desc">${achievement.description}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    loadDailyChallengeCard() {
+        const container = document.querySelector('.daily-challenge-card');
+        if (!container) return;
+
+        if (!this.userData.dailyChallenge) {
+            this.generateDailyChallenge();
+        }
+
+        const challenge = this.userData.dailyChallenge;
+        const progress = challenge.progress || 0;
+        const progressPercent = Math.min((progress / challenge.target) * 100, 100);
+        const isComplete = progress >= challenge.target;
+
+        container.innerHTML = `
+            <div class="challenge-header">
+                <h4>🎯 Daily Challenge</h4>
+                <span class="challenge-reward">+${challenge.xpReward} XP</span>
+            </div>
+            <div class="challenge-name">${challenge.name}</div>
+            <div class="challenge-description">${challenge.description}</div>
+            <div class="challenge-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill ${isComplete ? 'complete' : ''}" style="width: ${progressPercent}%"></div>
+                </div>
+                <div class="progress-text">
+                    ${progress}/${challenge.target} ${isComplete ? '✅ Complete!' : ''}
+                </div>
+            </div>
+        `;
     }
 
     // ===== TRACKING =====
@@ -1305,27 +1683,77 @@ class ScrollBalancePro {
         const isAligned = card.dataset.aligned === 'true';
         const goal = card.dataset.goal;
         const contentId = card.dataset.id;
+        const currentHour = new Date().getHours();
 
-        // Record rating
-        this.userData.contentRatings.push({
+        // Record rating with enhanced metadata
+        const ratingData = {
             id: contentId,
             goal: goal,
             aligned: isAligned,
             rating: rating,
-            timestamp: Date.now()
-        });
+            timestamp: Date.now(),
+            hour: currentHour,
+            sessionTime: Date.now() - this.sessionStartTime
+        };
 
-        // Award XP
-        let xpGained = 0;
+        this.userData.contentRatings.push(ratingData);
+        this.userData.sessionRatings.push(ratingData);
+        this.userData.totalContentRated++;
+
         if (rating === 'valuable') {
-            xpGained = isAligned ? 15 : 5;
+            this.userData.totalValuableContent++;
+        }
+
+        // Update hourly engagement patterns
+        const hourData = this.userData.hourlyEngagement[currentHour];
+        hourData.ratings++;
+        if (rating === 'valuable') hourData.valuable++;
+        if (isAligned) hourData.aligned++;
+        if (rating === 'skip') hourData.skip++;
+
+        // Track quality streaks
+        if (rating === 'valuable' && isAligned) {
+            this.userData.qualityStreakCurrent++;
+            if (this.userData.qualityStreakCurrent > this.userData.qualityStreakBest) {
+                this.userData.qualityStreakBest = this.userData.qualityStreakCurrent;
+            }
+            this.sessionAlignedCount++;
+        } else {
+            this.userData.qualityStreakCurrent = 0;
+        }
+
+        // Award XP with streak multipliers
+        let xpGained = 0;
+        let baseXP = 0;
+        let multiplier = 1;
+
+        if (rating === 'valuable') {
+            baseXP = isAligned ? 15 : 5;
+
+            // Streak multipliers
+            if (this.userData.streak >= 30) multiplier = 3;
+            else if (this.userData.streak >= 7) multiplier = 2;
+
+            // Quality streak bonus
+            if (this.userData.qualityStreakCurrent >= 5) {
+                multiplier += 0.5;
+            }
+
+            xpGained = Math.round(baseXP * multiplier);
             this.userData.xp += xpGained;
-            this.addActivity('xp', `Earned ${xpGained} XP from valuable content`, new Date());
+
+            const bonusText = multiplier > 1 ? ` (${multiplier}x bonus!)` : '';
+            this.addActivity('xp', `Earned ${xpGained} XP${bonusText}`, new Date());
         } else if (rating === 'skip') {
             if (!isAligned) {
                 xpGained = 3;
                 this.userData.xp += xpGained;
             }
+        }
+
+        // Show XP gain animation
+        if (xpGained > 0) {
+            this.showXPAnimation(card, xpGained, multiplier);
         }
 
         // Visual feedback
@@ -1357,6 +1785,175 @@ class ScrollBalancePro {
         this.userData.dailyStats.contentViewed++;
         this.calculateWellnessScore();
         this.updateAllStats();
+
+        // Check for achievements and challenges
+        this.updateDailyChallengeProgress();
+        this.checkAchievements();
+
+        // Live coaching and behavioral nudges
+        this.provideLiveCoaching();
+        this.detectMindlessScrolling();
+
+        // Update dashboard if visible
+        this.updateDashboardCoaching();
+    }
+
+    // ===== LIVE COACHING & BEHAVIORAL NUDGES =====
+    provideLiveCoaching() {
+        const now = Date.now();
+        const sessionDuration = (now - this.sessionStartTime) / 1000 / 60; // minutes
+
+        // Don't spam - wait at least 2 minutes between messages
+        if (now - this.userData.lastNudgeTime < 120000) return;
+
+        const recentRatings = this.userData.sessionRatings.slice(-10);
+        if (recentRatings.length < 5) return;
+
+        const valuableCount = recentRatings.filter(r => r.rating === 'valuable').length;
+        const alignedCount = recentRatings.filter(r => r.aligned).length;
+        const valuableRate = valuableCount / recentRatings.length;
+        const alignedRate = alignedCount / recentRatings.length;
+
+        let message = null;
+        let type = 'info';
+
+        // Positive reinforcement
+        if (valuableRate >= 0.8 && alignedRate >= 0.8) {
+            const messages = [
+                "🌟 You're in the zone! Great content choices!",
+                "✨ Excellent flow! You're riding the algorithm perfectly.",
+                "🎯 Amazing alignment! Keep this momentum going!",
+                "🚀 You're on fire! Quality content streak!"
+            ];
+            message = messages[Math.floor(Math.random() * messages.length)];
+            type = 'success';
+        }
+        // Gentle course correction
+        else if (valuableRate < 0.3 && recentRatings.length >= 8) {
+            message = "💭 Noticed you're skipping a lot. Need a mental break?";
+            type = 'warning';
+            this.userData.mindlessScrollDetected++;
+        }
+        // Micro-break suggestion
+        else if (sessionDuration > 30 && valuableRate < 0.5) {
+            message = "🧘 You've been scrolling for a while. Quick stretch?";
+            type = 'info';
+        }
+        // Quality streak celebration
+        else if (this.userData.qualityStreakCurrent === 5) {
+            message = "🎯 5 in a row! You're building quality habits!";
+            type = 'achievement';
+        }
+
+        if (message && message !== this.lastCoachingMessage) {
+            this.showToast('Live Coaching', message, type);
+            this.lastCoachingMessage = message;
+            this.userData.lastNudgeTime = now;
+        }
+    }
+
+    detectMindlessScrolling() {
+        const recent = this.userData.sessionRatings.slice(-15);
+        if (recent.length < 15) return;
+
+        const lastMinute = recent.filter(r => Date.now() - r.timestamp < 60000);
+
+        // Scrolling too fast = mindless
+        if (lastMinute.length >= 10) {
+            const skipRate = lastMinute.filter(r => r.rating === 'skip').length / lastMinute.length;
+            if (skipRate > 0.7) {
+                this.showToast(
+                    '🌊 Slow Down',
+                    'Take a breath. What are you looking for?',
+                    'warning'
+                );
+                this.userData.mindlessScrollDetected++;
+                this.userData.lastNudgeTime = Date.now();
+            }
+        }
+    }
+
+    showXPAnimation(card, xp, multiplier) {
+        const xpElement = document.createElement('div');
+        xpElement.className = 'xp-popup';
+        xpElement.textContent = `+${xp} XP`;
+
+        if (multiplier > 1) {
+            xpElement.classList.add('multiplier');
+            xpElement.textContent += ` ${multiplier}x`;
+        }
+
+        const rect = card.getBoundingClientRect();
+        xpElement.style.position = 'fixed';
+        xpElement.style.left = rect.left + rect.width / 2 + 'px';
+        xpElement.style.top = rect.top + 'px';
+
+        document.body.appendChild(xpElement);
+
+        setTimeout(() => {
+            xpElement.remove();
+        }, 2000);
+    }
+
+    showToast(title, message, type = 'info') {
+        // Create toast notification
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.innerHTML = `
+            <div class="toast-title">${title}</div>
+            <div class="toast-message">${message}</div>
+        `;
+
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.classList.add('show');
+        }, 10);
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
+    }
+
+    updateDashboardCoaching() {
+        // Live session stats on dashboard
+        const coachingContainer = document.querySelector('.live-coaching');
+        if (!coachingContainer) return;
+
+        const sessionDuration = Math.floor((Date.now() - this.sessionStartTime) / 1000 / 60);
+        const sessionRatings = this.userData.sessionRatings.length;
+        const sessionValuable = this.userData.sessionRatings.filter(r => r.rating === 'valuable').length;
+        const sessionAlignmentRate = sessionRatings > 0
+            ? Math.round((this.sessionAlignedCount / sessionRatings) * 100)
+            : 0;
+
+        coachingContainer.innerHTML = `
+            <h4>📊 Live Session</h4>
+            <div class="session-stats">
+                <div class="stat-inline">
+                    <span class="label">Duration:</span>
+                    <span class="value">${sessionDuration} min</span>
+                </div>
+                <div class="stat-inline">
+                    <span class="label">Rated:</span>
+                    <span class="value">${sessionRatings} items</span>
+                </div>
+                <div class="stat-inline">
+                    <span class="label">Valuable:</span>
+                    <span class="value">${sessionValuable} (${sessionRatings > 0 ? Math.round((sessionValuable/sessionRatings)*100) : 0}%)</span>
+                </div>
+                <div class="stat-inline ${sessionAlignmentRate >= 80 ? 'excellent' : sessionAlignmentRate >= 60 ? 'good' : ''}">
+                    <span class="label">Alignment:</span>
+                    <span class="value">${sessionAlignmentRate}%</span>
+                </div>
+                ${this.userData.qualityStreakCurrent >= 3 ? `
+                    <div class="streak-indicator">
+                        🔥 ${this.userData.qualityStreakCurrent} quality streak!
+                    </div>
+                ` : ''}
+            </div>
+        `;
     }
 
     // ===== ACTIVITY TIMELINE =====
@@ -1463,6 +2060,11 @@ class ScrollBalancePro {
         this.loadUsageHeatmap();
         this.loadTimeDistribution();
         this.loadMoodChart();
+
+        // Load advanced analytics
+        this.loadQualityTrendsChart();
+        this.loadTimeOfDayHeatmap();
+        this.generateWeeklyInsights();
 
         console.log('Analytics charts initialized');
     }
@@ -1719,6 +2321,311 @@ class ScrollBalancePro {
             data.push(Math.round(screenTimeHours * 10) / 10); // Round to 1 decimal
         }
         return data;
+    }
+
+    // ===== ADVANCED ANALYTICS =====
+    loadQualityTrendsChart() {
+        const canvas = document.getElementById('quality-trends-chart');
+        if (!canvas) return;
+
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        // Calculate quality trends over last 14 days
+        const qualityData = [];
+        const labels = [];
+
+        for (let i = 13; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateKey = date.toDateString();
+
+            const dayRatings = this.userData.contentRatings.filter(r => {
+                return new Date(r.timestamp).toDateString() === dateKey;
+            });
+
+            let quality = null;
+            if (dayRatings.length >= 3) {
+                const valuable = dayRatings.filter(r => r.rating === 'valuable').length;
+                quality = Math.round((valuable / dayRatings.length) * 100);
+            }
+
+            qualityData.push(quality);
+            labels.push(this.formatShortDate(date));
+        }
+
+        if (this.qualityTrendsChart) {
+            this.qualityTrendsChart.destroy();
+        }
+
+        this.qualityTrendsChart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Content Quality %',
+                    data: qualityData,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    spanGaps: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { color: '#334155' },
+                        ticks: { color: '#94a3b8' }
+                    },
+                    x: {
+                        grid: { color: '#334155' },
+                        ticks: { color: '#94a3b8', maxRotation: 45 }
+                    }
+                }
+            }
+        });
+    }
+
+    loadTimeOfDayHeatmap() {
+        const canvas = document.getElementById('time-heatmap-chart');
+        if (!canvas) return;
+
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        // Calculate quality by hour
+        const hourlyQuality = [];
+        const labels = [];
+
+        for (let hour = 0; hour < 24; hour++) {
+            const hourData = this.userData.hourlyEngagement[hour];
+
+            let quality = 0;
+            if (hourData.ratings > 0) {
+                quality = Math.round((hourData.valuable / hourData.ratings) * 100);
+            }
+
+            hourlyQuality.push(hourData.ratings > 0 ? quality : null);
+
+            // Format hour (12h format)
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const hour12 = hour % 12 || 12;
+            labels.push(`${hour12}${ampm}`);
+        }
+
+        if (this.timeHeatmapChart) {
+            this.timeHeatmapChart.destroy();
+        }
+
+        this.timeHeatmapChart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Quality %',
+                    data: hourlyQuality,
+                    backgroundColor: hourlyQuality.map(q => {
+                        if (q === null) return '#1e293b';
+                        if (q >= 75) return '#10b981';
+                        if (q >= 50) return '#f59e0b';
+                        return '#ef4444';
+                    }),
+                    borderRadius: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { color: '#334155' },
+                        ticks: { color: '#94a3b8' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#94a3b8', font: { size: 9 } }
+                    }
+                }
+            }
+        });
+    }
+
+    generateWeeklyInsights() {
+        const container = document.querySelector('.weekly-insights');
+        if (!container) return;
+
+        // Calculate last 7 days vs previous 7 days
+        const now = new Date();
+        const thisWeek = [];
+        const lastWeek = [];
+
+        for (let i = 0; i < 7; i++) {
+            const thisDate = new Date(now);
+            thisDate.setDate(now.getDate() - i);
+
+            const lastDate = new Date(now);
+            lastDate.setDate(now.getDate() - i - 7);
+
+            const thisRatings = this.userData.contentRatings.filter(r => {
+                return new Date(r.timestamp).toDateString() === thisDate.toDateString();
+            });
+
+            const lastRatings = this.userData.contentRatings.filter(r => {
+                return new Date(r.timestamp).toDateString() === lastDate.toDateString();
+            });
+
+            thisWeek.push(...thisRatings);
+            lastWeek.push(...lastRatings);
+        }
+
+        // Calculate metrics
+        const thisValuable = thisWeek.filter(r => r.rating === 'valuable').length;
+        const lastValuable = lastWeek.filter(r => r.rating === 'valuable').length;
+
+        const thisAligned = thisWeek.filter(r => r.aligned).length;
+        const lastAligned = lastWeek.filter(r => r.aligned).length;
+
+        const thisQuality = thisWeek.length > 0 ? (thisValuable / thisWeek.length) * 100 : 0;
+        const lastQuality = lastWeek.length > 0 ? (lastValuable / lastWeek.length) * 100 : 0;
+
+        const thisAlignment = thisWeek.length > 0 ? (thisAligned / thisWeek.length) * 100 : 0;
+        const lastAlignment = lastWeek.length > 0 ? (lastAligned / lastWeek.length) * 100 : 0;
+
+        const qualityChange = thisQuality - lastQuality;
+        const alignmentChange = thisAlignment - lastAlignment;
+
+        // Find best/worst hours
+        const bestHour = this.findBestHour();
+        const worstHour = this.findWorstHour();
+
+        // Generate insights
+        const insights = [];
+
+        if (qualityChange > 5) {
+            insights.push({
+                type: 'positive',
+                icon: '📈',
+                text: `Content quality improved by ${Math.round(qualityChange)}% this week!`
+            });
+        } else if (qualityChange < -5) {
+            insights.push({
+                type: 'negative',
+                icon: '📉',
+                text: `Content quality dropped ${Math.round(Math.abs(qualityChange))}% this week.`
+            });
+        }
+
+        if (alignmentChange > 5) {
+            insights.push({
+                type: 'positive',
+                icon: '🎯',
+                text: `Goal alignment up ${Math.round(alignmentChange)}%! You're finding what matters.`
+            });
+        }
+
+        if (this.userData.qualityStreakBest >= 5) {
+            insights.push({
+                type: 'achievement',
+                icon: '🔥',
+                text: `Best streak: ${this.userData.qualityStreakBest} quality items in a row!`
+            });
+        }
+
+        if (bestHour) {
+            const ampm = bestHour >= 12 ? 'PM' : 'AM';
+            const hour12 = bestHour % 12 || 12;
+            insights.push({
+                type: 'info',
+                icon: '⏰',
+                text: `You're most mindful around ${hour12}${ampm}`
+            });
+        }
+
+        if (worstHour && this.userData.hourlyEngagement[worstHour].ratings >= 5) {
+            const ampm = worstHour >= 12 ? 'PM' : 'AM';
+            const hour12 = worstHour % 12 || 12;
+            insights.push({
+                type: 'warning',
+                icon: '⚠️',
+                text: `Mindless scrolling tends to happen around ${hour12}${ampm}`
+            });
+        }
+
+        if (this.userData.streak >= 7) {
+            insights.push({
+                type: 'positive',
+                icon: '💎',
+                text: `${this.userData.streak}-day streak! You're building lasting habits.`
+            });
+        }
+
+        // Render insights
+        if (insights.length === 0) {
+            container.innerHTML = '<p class="no-insights">Keep rating content to unlock personalized insights!</p>';
+            return;
+        }
+
+        container.innerHTML = insights.map(insight => `
+            <div class="insight-card insight-${insight.type}">
+                <span class="insight-icon">${insight.icon}</span>
+                <span class="insight-text">${insight.text}</span>
+            </div>
+        `).join('');
+    }
+
+    findBestHour() {
+        let bestHour = -1;
+        let bestQuality = 0;
+
+        for (let hour = 0; hour < 24; hour++) {
+            const hourData = this.userData.hourlyEngagement[hour];
+            if (hourData.ratings < 5) continue; // Need at least 5 ratings
+
+            const quality = (hourData.valuable / hourData.ratings) * 100;
+            if (quality > bestQuality) {
+                bestQuality = quality;
+                bestHour = hour;
+            }
+        }
+
+        return bestHour >= 0 ? bestHour : null;
+    }
+
+    findWorstHour() {
+        let worstHour = -1;
+        let worstQuality = 100;
+
+        for (let hour = 0; hour < 24; hour++) {
+            const hourData = this.userData.hourlyEngagement[hour];
+            if (hourData.ratings < 5) continue;
+
+            const quality = (hourData.valuable / hourData.ratings) * 100;
+            if (quality < worstQuality) {
+                worstQuality = quality;
+                worstHour = hour;
+            }
+        }
+
+        return worstHour >= 0 ? worstHour : null;
+    }
+
+    formatShortDate(date) {
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        return `${month}/${day}`;
     }
 
     // ===== MODALS =====
