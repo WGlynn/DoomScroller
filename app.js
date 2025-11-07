@@ -1841,7 +1841,17 @@ class ScrollBalancePro {
         const actualTime = (Date.now() - viewStart) / 1000; // in seconds
         const engagementRatio = actualTime / expectedTime;
 
-        // Record rating with enhanced metadata including engagement
+        // Calculate collective voting results FIRST to determine consensus
+        const valuableVotes = parseInt(card.dataset.valuableVotes);
+        const brainrotVotes = parseInt(card.dataset.brainrotVotes);
+        const newValuable = rating === 'valuable' ? valuableVotes + 1 : valuableVotes;
+        const newBrainrot = rating === 'skip' ? brainrotVotes + 1 : brainrotVotes;
+        const totalVotes = newValuable + newBrainrot;
+        const valuablePercentage = Math.round((newValuable / totalVotes) * 100);
+        const majorityVote = valuablePercentage >= 50 ? 'valuable' : 'skip';
+        const votedWithMajority = rating === majorityVote;
+
+        // Record rating with enhanced metadata including engagement and consensus
         const ratingData = {
             id: contentId,
             goal: goal,
@@ -1852,7 +1862,9 @@ class ScrollBalancePro {
             sessionTime: Date.now() - this.sessionStartTime,
             engagementTime: actualTime,
             expectedTime: expectedTime,
-            engagementRatio: engagementRatio
+            engagementRatio: engagementRatio,
+            votedWithMajority: votedWithMajority,
+            communityPercentage: valuablePercentage
         };
 
         this.userData.contentRatings.push(ratingData);
@@ -1881,21 +1893,7 @@ class ScrollBalancePro {
             this.userData.qualityStreakCurrent = 0;
         }
 
-        // Calculate collective voting results FIRST
-        const valuableVotes = parseInt(card.dataset.valuableVotes);
-        const brainrotVotes = parseInt(card.dataset.brainrotVotes);
-
-        // Increment based on user's vote
-        const newValuable = rating === 'valuable' ? valuableVotes + 1 : valuableVotes;
-        const newBrainrot = rating === 'skip' ? brainrotVotes + 1 : brainrotVotes;
-        const totalVotes = newValuable + newBrainrot;
-        const valuablePercentage = Math.round((newValuable / totalVotes) * 100);
-
-        // Determine the majority vote
-        const majorityVote = valuablePercentage >= 50 ? 'valuable' : 'skip';
-        const votedWithMajority = rating === majorityVote;
-
-        // Award XP ONLY if user voted with the majority
+        // Award XP ONLY if user voted with the majority (already calculated above)
         let xpGained = 0;
         let baseXP = 0;
         let multiplier = 1;
@@ -3222,53 +3220,321 @@ class ScrollBalancePro {
         this.saveData();
     }
 
-    // Context-aware triggers
+    // Calculate significance of various metrics (1-10 scale)
+    calculateMetricSignificance() {
+        const metrics = [];
+        const temperament = this.userData.owlTemperament;
+
+        // Track previous wellness score for change detection
+        if (!this.previousWellnessScore) {
+            this.previousWellnessScore = this.userData.wellnessScore;
+        }
+
+        // 1. Wellness Score Change
+        const wellnessChange = this.userData.wellnessScore - this.previousWellnessScore;
+        const wellnessChangeAbs = Math.abs(wellnessChange);
+        if (wellnessChangeAbs >= 10) {
+            const significance = Math.min(10, Math.floor(wellnessChangeAbs / 5));
+            metrics.push({
+                significance,
+                type: wellnessChange > 0 ? 'positive' : 'negative',
+                metric: 'wellness_change',
+                data: {
+                    current: this.userData.wellnessScore,
+                    previous: this.previousWellnessScore,
+                    change: wellnessChange
+                }
+            });
+        }
+
+        // 2. Quality Streak
+        if (this.userData.qualityStreakCurrent >= 5) {
+            const significance = Math.min(10, Math.floor(this.userData.qualityStreakCurrent / 2));
+            metrics.push({
+                significance,
+                type: 'positive',
+                metric: 'quality_streak',
+                data: {
+                    current: this.userData.qualityStreakCurrent,
+                    best: this.userData.qualityStreakBest
+                }
+            });
+        }
+
+        // 3. Consensus Voting Pattern
+        const recentRatings = this.userData.sessionRatings.slice(-10);
+        if (recentRatings.length >= 5) {
+            const consensusMatches = recentRatings.filter(r => {
+                // Check if they have consensus data (only after voting system was implemented)
+                return r.votedWithMajority !== undefined;
+            });
+
+            if (consensusMatches.length >= 5) {
+                const consensusRate = (consensusMatches.filter(r => r.votedWithMajority).length / consensusMatches.length) * 100;
+                if (consensusRate <= 40) {
+                    // Low consensus - significant problem
+                    metrics.push({
+                        significance: 8,
+                        type: 'negative',
+                        metric: 'low_consensus',
+                        data: {
+                            rate: Math.round(consensusRate),
+                            total: consensusMatches.length
+                        }
+                    });
+                } else if (consensusRate >= 80) {
+                    // High consensus - significant achievement
+                    metrics.push({
+                        significance: 7,
+                        type: 'positive',
+                        metric: 'high_consensus',
+                        data: {
+                            rate: Math.round(consensusRate),
+                            total: consensusMatches.length
+                        }
+                    });
+                }
+            }
+        }
+
+        // 4. Engagement Quality
+        const recentWithEngagement = this.userData.sessionRatings.slice(-5).filter(r => r.engagementRatio);
+        if (recentWithEngagement.length >= 3) {
+            const avgEngagement = recentWithEngagement.reduce((sum, r) => sum + r.engagementRatio, 0) / recentWithEngagement.length;
+            if (avgEngagement < 0.5) {
+                // Rushing through content
+                metrics.push({
+                    significance: 7,
+                    type: 'negative',
+                    metric: 'rushing',
+                    data: {
+                        avgRatio: avgEngagement.toFixed(2),
+                        percentage: Math.round(avgEngagement * 100)
+                    }
+                });
+            } else if (avgEngagement >= 1.2) {
+                // Mindful reading
+                metrics.push({
+                    significance: 6,
+                    type: 'positive',
+                    metric: 'mindful_reading',
+                    data: {
+                        avgRatio: avgEngagement.toFixed(2),
+                        percentage: Math.round(avgEngagement * 100)
+                    }
+                });
+            }
+        }
+
+        // 5. Session Duration
+        const sessionMinutes = (Date.now() - this.sessionStartTime) / 60000;
+        if (sessionMinutes > 45) {
+            const significance = Math.min(10, Math.floor(sessionMinutes / 15));
+            metrics.push({
+                significance,
+                type: 'negative',
+                metric: 'long_session',
+                data: {
+                    minutes: Math.round(sessionMinutes),
+                    hours: (sessionMinutes / 60).toFixed(1)
+                }
+            });
+        }
+
+        // 6. Mindless Scrolling Spike
+        if (this.userData.mindlessScrollDetected >= 3) {
+            const significance = Math.min(10, this.userData.mindlessScrollDetected * 2);
+            metrics.push({
+                significance,
+                type: 'negative',
+                metric: 'mindless_scrolling',
+                data: {
+                    count: this.userData.mindlessScrollDetected
+                }
+            });
+        }
+
+        // 7. XP Milestone
+        const level = this.calculateLevel();
+        if (level.xp >= level.xpForNext - 20 && level.xp < level.xpForNext) {
+            // Close to leveling up
+            metrics.push({
+                significance: 6,
+                type: 'positive',
+                metric: 'close_to_level',
+                data: {
+                    nextLevel: level.level + 1,
+                    xpNeeded: level.xpForNext - level.xp,
+                    currentXP: level.xp
+                }
+            });
+        }
+
+        // Update previous wellness score for next check
+        this.previousWellnessScore = this.userData.wellnessScore;
+
+        return metrics;
+    }
+
+    getSpecificOwlMessage(metric) {
+        const temperament = this.userData.owlTemperament;
+        const { type, metric: metricName, data } = metric;
+
+        const messages = {
+            wellness_change: {
+                positive: {
+                    encouraging: `Amazing! Your wellness score jumped ${data.change} points to ${data.current}! You're making real progress! 🌟`,
+                    'tough-love': `Finally! Wellness up ${data.change} points to ${data.current}. This is what I've been waiting for. Keep it up.`,
+                    zen: `Observe: Wellness rose from ${data.previous} to ${data.current}. A ${data.change}-point shift. The path becomes clearer. 🌸`,
+                    quirky: `SCORE UPDATE! Wellness go brrr up ${data.change} points! Now at ${data.current}! *does happy owl dance* 🦉`
+                },
+                negative: {
+                    encouraging: `Hey, your wellness dropped ${Math.abs(data.change)} points to ${data.current}. It's okay - let's get back on track together! 💚`,
+                    'tough-love': `Wellness crashed ${Math.abs(data.change)} points to ${data.current}. What happened? Fix this. Now.`,
+                    zen: `Notice: Wellness descended from ${data.previous} to ${data.current}. A ${Math.abs(data.change)}-point fall. Realign your practice.`,
+                    quirky: `ALERT! ALERT! Wellness took a ${Math.abs(data.change)}-point nosedive to ${data.current}! This is not a drill! *flaps wings frantically*`
+                }
+            },
+
+            quality_streak: {
+                positive: {
+                    encouraging: `Incredible! You're on a ${data.current}-rating quality streak! ${data.current === data.best ? "That's your personal best! 🏆" : "Keep going!"}`,
+                    'tough-love': `${data.current} straight quality ratings. That's what I'm talking about. ${data.current >= 10 ? "Don't get cocky though." : "Push harder."}`,
+                    zen: `Flow state achieved: ${data.current} consecutive mindful choices. ${data.current === data.best ? "A new peak. 🏔️" : "The path continues."}`,
+                    quirky: `STREAK ALERT! ${data.current} in a row! You're basically a content-judging superhero! ${data.current === data.best ? "NEW RECORD! 🎉" : "*happy hooting*"}`
+                }
+            },
+
+            low_consensus: {
+                negative: {
+                    encouraging: `I notice you're only matching community consensus ${data.rate}% of the time (${data.total} recent votes). Maybe think more about collective judgment? 🤔`,
+                    'tough-love': `${data.rate}% consensus rate out of ${data.total} votes? You're voting against the crowd too much. Either everyone's wrong or you are. Figure it out.`,
+                    zen: `Observation: ${data.rate}% harmony with community across ${data.total} votes. The individual mind diverges from the collective. Consider why.`,
+                    quirky: `Umm, so... ${data.rate}% agreement with humans in your last ${data.total} votes. Are you perhaps a rebellious AI? *suspicious owl eyes* 👀`
+                }
+            },
+
+            high_consensus: {
+                positive: {
+                    encouraging: `Wow! You're voting with the community ${data.rate}% of the time over ${data.total} votes! You're really in tune! ✨`,
+                    'tough-love': `${data.rate}% consensus rate across ${data.total} votes. Good. You're thinking like the collective. This is how it should be.`,
+                    zen: `Harmony: ${data.rate}% alignment with community wisdom across ${data.total} judgments. The individual and collective flow as one. 🌊`,
+                    quirky: `HIVE MIND ACHIEVEMENT! ${data.rate}% agreement over ${data.total} votes! You're like... owl-psychic or something! 🔮`
+                }
+            },
+
+            rushing: {
+                negative: {
+                    encouraging: `You're only spending ${data.percentage}% of expected reading time on content. Slow down a bit, friend! 📚`,
+                    'tough-love': `${data.percentage}% engagement ratio? You're rushing. ACTUALLY READ THE CONTENT. That's the whole point.`,
+                    zen: `The mind rushes: ${data.percentage}% of time given to each piece. Haste clouds judgment. Breathe. Read. Reflect.`,
+                    quirky: `Speed reader mode activated! ${data.percentage}% time invested! But wait... this isn't a race! Slow your roll, turbo! 🏃‍♂️💨`
+                }
+            },
+
+            mindful_reading: {
+                positive: {
+                    encouraging: `Beautiful! You're taking ${data.percentage}% of expected time to read mindfully. This is exactly right! 🌿`,
+                    'tough-love': `${data.percentage}% time investment per piece. Actually reading. Good. This is the standard.`,
+                    zen: `Presence observed: ${data.percentage}% time given to each teaching. The patient mind sees clearly. Continue. 🧘`,
+                    quirky: `MINDFUL MODE ENGAGED! ${data.percentage}% reading time! You're treating content like a fine wine! *chef's kiss* 👨‍🍳`
+                }
+            },
+
+            long_session: {
+                negative: {
+                    encouraging: `You've been here ${data.minutes} minutes (${data.hours} hours)! Maybe time for a break, friend? 💙`,
+                    'tough-love': `${data.minutes} minutes straight. ${data.hours} hours. Get up. Move. Break. NOW.`,
+                    zen: `Time accumulates: ${data.minutes} minutes pass. ${data.hours} hours flow. The body needs movement. Rise.`,
+                    quirky: `SEAT TIME: ${data.minutes} MINUTES (${data.hours} HRS)! Your chair misses you... wait, no. Your LEGS miss you! Go! Shoo! 🦵`
+                }
+            },
+
+            mindless_scrolling: {
+                negative: {
+                    encouraging: `I've detected ${data.count} mindless scrolling episodes. Let's be more intentional, okay? 🎯`,
+                    'tough-love': `${data.count} mindless scrolling spikes detected. STOP. THINK. THEN VOTE. You're better than this.`,
+                    zen: `Pattern detected: ${data.count} moments of mindless motion. The hand moves, the mind sleeps. Wake up.`,
+                    quirky: `ZOMBIE MODE ALERT! ${data.count} brain-dead scrolling instances! *waves wing in front of your face* Hello? Anyone home? 🧟`
+                }
+            },
+
+            close_to_level: {
+                positive: {
+                    encouraging: `You're SO close to level ${data.nextLevel}! Just ${data.xpNeeded} XP away! You've got this! 🎯`,
+                    'tough-love': `${data.xpNeeded} XP until level ${data.nextLevel}. Don't choke now. Finish strong.`,
+                    zen: `The next threshold approaches: Level ${data.nextLevel} awaits, ${data.xpNeeded} XP distant. The journey continues. ⛰️`,
+                    quirky: `LEVEL UP IMMINENT! Only ${data.xpNeeded} XP to ${data.nextLevel}! I can taste it! Wait, can owls taste XP? 🤔`
+                }
+            }
+        };
+
+        return messages[metricName]?.[type]?.[temperament] ||
+               messages[metricName]?.[type]?.encouraging ||
+               "Something interesting happened with your stats! 🦉";
+    }
+
+    // Context-aware triggers with significance scoring
     checkOwlTriggers() {
         if (!this.userData.owlEnabled) {
             console.log('🦉 Owl is disabled');
             return;
         }
 
-        console.log('🦉 Checking owl triggers...');
+        console.log('🦉 Calculating metric significance...');
 
-        // Low wellness
-        if (this.userData.wellnessScore < 60) {
-            console.log('🦉 Low wellness detected:', this.userData.wellnessScore);
-            if (Math.random() < 0.3) { // 30% chance
-                this.triggerOwlAppearance('low_wellness');
-            }
+        const metrics = this.calculateMetricSignificance();
+
+        // Filter for significance > 5
+        const significantMetrics = metrics.filter(m => m.significance > 5);
+
+        if (significantMetrics.length === 0) {
+            console.log('🦉 No significant metrics detected');
+            return;
         }
 
-        // Quality streak
-        if (this.userData.qualityStreakCurrent >= 7) {
-            console.log('🦉 Quality streak detected:', this.userData.qualityStreakCurrent);
-            if (Math.random() < 0.5) { // 50% chance
-                this.triggerOwlAppearance('quality_streak');
-            }
+        // Find most significant metric
+        const mostSignificant = significantMetrics.reduce((max, m) =>
+            m.significance > max.significance ? m : max
+        );
+
+        console.log('🦉 Most significant metric:', mostSignificant.metric, 'significance:', mostSignificant.significance);
+
+        // Probability based on significance (5 = 10%, 10 = 60%)
+        const probability = (mostSignificant.significance - 5) * 0.1 + 0.1;
+
+        if (Math.random() < probability) {
+            const message = this.getSpecificOwlMessage(mostSignificant);
+            this.triggerOwlAppearance(mostSignificant.metric, false, message);
+        } else {
+            console.log('🦉 Probability check failed:', probability.toFixed(2));
+        }
+    }
+
+    triggerOwlAppearance(context, forceShow = false, customMessage = null) {
+        console.log('🦉 Trigger owl appearance called:', context, 'forceShow:', forceShow);
+
+        if (!forceShow && !this.shouldOwlAppear()) {
+            console.log('🦉 Owl appearance blocked by shouldOwlAppear()');
+            return;
         }
 
-        // Mindless scrolling
-        if (this.userData.mindlessScrollDetected > 3) {
-            console.log('🦉 Mindless scrolling detected:', this.userData.mindlessScrollDetected);
-            if (Math.random() < 0.4) { // 40% chance
-                this.triggerOwlAppearance('mindless_scroll');
-            }
+        const message = customMessage || "Hey there! Just checking in! 🦉";
+        this.showOwl(message, context);
+
+        this.userData.lastOwlAppearance = Date.now();
+        this.userData.owlInteractions.push({
+            context,
+            message: message,
+            timestamp: Date.now()
+        });
+
+        // Keep last 50 interactions
+        if (this.userData.owlInteractions.length > 50) {
+            this.userData.owlInteractions = this.userData.owlInteractions.slice(-50);
         }
 
-        // Long session (over 45 minutes)
-        const sessionTime = (Date.now() - this.sessionStartTime) / 60000;
-        if (sessionTime > 45) {
-            console.log('🦉 Long session detected:', sessionTime, 'minutes');
-            if (Math.random() < 0.3) { // 30% chance
-                this.triggerOwlAppearance('long_session');
-            }
-        }
-
-        // Random check-in (10% chance every check)
-        if (Math.random() < 0.1) {
-            console.log('🦉 Random check-in triggered');
-            this.triggerOwlAppearance('checkin');
-        }
+        this.saveData();
     }
 
     // ===== MODALS =====
