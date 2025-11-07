@@ -1,5 +1,35 @@
 // Scroll Balance Pro - Advanced Wellness Tracking App
 
+// Utility: Sanitize HTML to prevent XSS
+function sanitizeHTML(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// Rate Limiter for Reddit API
+class RateLimiter {
+    constructor(maxRequests, timeWindow) {
+        this.maxRequests = maxRequests;
+        this.timeWindow = timeWindow;
+        this.requests = [];
+    }
+
+    async throttle() {
+        const now = Date.now();
+        this.requests = this.requests.filter(time => now - time < this.timeWindow);
+
+        if (this.requests.length >= this.maxRequests) {
+            const oldestRequest = this.requests[0];
+            const waitTime = this.timeWindow - (now - oldestRequest);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+
+        this.requests.push(Date.now());
+    }
+}
+
 class ScrollBalancePro {
     constructor() {
         this.userData = {
@@ -23,12 +53,32 @@ class ScrollBalancePro {
         this.timeChart = null;
         this.moodChart = null;
 
+        // Navigation lock
+        this.isNavigating = false;
+
+        // Page visibility tracking
+        this.isVisible = !document.hidden;
+        this.lastInteraction = Date.now();
+
+        // Reddit API rate limiter (30 requests per minute)
+        this.redditLimiter = new RateLimiter(30, 60000);
+
+        // Reddit content cache
+        this.redditCache = {
+            data: new Map(),
+            expiresAt: new Map()
+        };
+
+        // Historical data for charts
+        this.historicalData = this.loadHistoricalData();
+
         this.init();
     }
 
     init() {
         this.loadData();
         this.setupNavigation();
+        this.setupKeyboardShortcuts();
         this.setupModals();
         this.initCharts();
         this.updateAllStats();
@@ -42,6 +92,126 @@ class ScrollBalancePro {
         }
     }
 
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Don't trigger in input fields or textareas
+            if (e.target.matches('input, textarea')) return;
+
+            // Navigation shortcuts
+            switch(e.key) {
+                case '1':
+                    e.preventDefault();
+                    this.navigateTo('dashboard');
+                    break;
+                case '2':
+                    e.preventDefault();
+                    this.navigateTo('feed');
+                    break;
+                case '3':
+                    e.preventDefault();
+                    this.navigateTo('analytics');
+                    break;
+                case '4':
+                    e.preventDefault();
+                    this.navigateTo('goals');
+                    break;
+                case '5':
+                    e.preventDefault();
+                    this.navigateTo('settings');
+                    break;
+                case '6':
+                    e.preventDefault();
+                    this.navigateTo('about');
+                    break;
+                case '?':
+                    e.preventDefault();
+                    this.showKeyboardHelp();
+                    break;
+                case 'Escape':
+                    // Close any open modals
+                    this.closeReflectionModal();
+                    this.closeKeyboardHelp();
+                    break;
+            }
+        });
+    }
+
+    showKeyboardHelp() {
+        let helpModal = document.getElementById('keyboard-help-modal');
+
+        if (!helpModal) {
+            helpModal = document.createElement('div');
+            helpModal.id = 'keyboard-help-modal';
+            helpModal.className = 'modal active';
+            helpModal.innerHTML = `
+                <div class="modal-content modern">
+                    <button class="modal-close" onclick="app.closeKeyboardHelp()">&times;</button>
+                    <h2>⌨️ Keyboard Shortcuts</h2>
+                    <div style="margin-top: var(--spacing-xl);">
+                        <div class="shortcut-row">
+                            <kbd>1</kbd>
+                            <span>Go to Dashboard</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <kbd>2</kbd>
+                            <span>Go to Smart Feed</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <kbd>3</kbd>
+                            <span>Go to Analytics</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <kbd>4</kbd>
+                            <span>Go to Goals</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <kbd>5</kbd>
+                            <span>Go to Settings</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <kbd>6</kbd>
+                            <span>Go to About</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <kbd>?</kbd>
+                            <span>Show this help</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <kbd>Esc</kbd>
+                            <span>Close modals</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(helpModal);
+        } else {
+            helpModal.classList.add('active');
+        }
+    }
+
+    closeKeyboardHelp() {
+        const helpModal = document.getElementById('keyboard-help-modal');
+        if (helpModal) {
+            helpModal.classList.remove('active');
+        }
+    }
+
+    // ===== MOBILE MENU =====
+    toggleMobileMenu() {
+        const sidebar = document.querySelector('.sidebar');
+        sidebar.classList.toggle('mobile-open');
+
+        // Close menu when clicking nav items
+        if (sidebar.classList.contains('mobile-open')) {
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    sidebar.classList.remove('mobile-open');
+                }, { once: true });
+            });
+        }
+    }
+
     // ===== DATA MANAGEMENT =====
     loadData() {
         const saved = localStorage.getItem('scrollBalancePro');
@@ -52,7 +222,57 @@ class ScrollBalancePro {
     }
 
     saveData() {
-        localStorage.setItem('scrollBalancePro', JSON.stringify(this.userData));
+        try {
+            const data = JSON.stringify(this.userData);
+
+            // Check size before saving (4.5MB threshold)
+            const size = new Blob([data]).size;
+            if (size > 4.5 * 1024 * 1024) {
+                console.warn('Data approaching localStorage limit, compressing...');
+                this.compressUserData();
+            }
+
+            localStorage.setItem('scrollBalancePro', data);
+
+            // Verify save succeeded
+            const saved = localStorage.getItem('scrollBalancePro');
+            if (!saved) {
+                throw new Error('Save verification failed');
+            }
+        } catch (error) {
+            console.error('Failed to save data:', error);
+
+            if (error.name === 'QuotaExceededError') {
+                // Try to compress and save again
+                this.compressUserData();
+                try {
+                    localStorage.setItem('scrollBalancePro', JSON.stringify(this.userData));
+                } catch (retryError) {
+                    // Last resort: alert user
+                    alert('Warning: Unable to save progress. Your data storage is full. Please export your data from Settings.');
+                }
+            }
+        }
+    }
+
+    compressUserData() {
+        // Keep only last 100 content ratings
+        if (this.userData.contentRatings.length > 100) {
+            this.userData.contentRatings = this.userData.contentRatings.slice(-100);
+        }
+
+        // Keep only last 50 activities
+        if (this.userData.activityHistory.length > 50) {
+            this.userData.activityHistory = this.userData.activityHistory.slice(-50);
+        }
+
+        // Keep only last 30 days of mood history
+        const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+        this.userData.moodHistory = this.userData.moodHistory.filter(
+            m => new Date(m.time).getTime() > thirtyDaysAgo
+        );
+
+        console.log('User data compressed');
     }
 
     loadDailyStats() {
@@ -74,6 +294,50 @@ class ScrollBalancePro {
         };
     }
 
+    loadHistoricalData() {
+        const saved = localStorage.getItem('historicalData');
+        if (saved) {
+            return JSON.parse(saved);
+        }
+
+        // Initialize with some baseline data for the last 7 days
+        const historical = {};
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateKey = date.toDateString();
+            historical[dateKey] = {
+                wellnessScore: 85,
+                screenTime: 0,
+                xpEarned: 0
+            };
+        }
+        return historical;
+    }
+
+    saveHistoricalData() {
+        if (!this.historicalData) {
+            this.historicalData = this.loadHistoricalData();
+        }
+
+        // Save today's data
+        const today = new Date().toDateString();
+        this.historicalData[today] = {
+            wellnessScore: this.userData.wellnessScore,
+            screenTime: this.userData.dailyStats.screenTime,
+            xpEarned: this.userData.xp
+        };
+
+        // Keep only last 90 days
+        const dates = Object.keys(this.historicalData).sort();
+        if (dates.length > 90) {
+            const toRemove = dates.slice(0, dates.length - 90);
+            toRemove.forEach(date => delete this.historicalData[date]);
+        }
+
+        localStorage.setItem('historicalData', JSON.stringify(this.historicalData));
+    }
+
     saveDailyStats() {
         localStorage.setItem('dailyStats', JSON.stringify(this.userData.dailyStats));
     }
@@ -89,26 +353,50 @@ class ScrollBalancePro {
         });
     }
 
-    navigateTo(pageName) {
-        // Update nav items
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.remove('active');
-        });
-        document.querySelector(`[data-page="${pageName}"]`).classList.add('active');
+    async navigateTo(pageName) {
+        // Prevent rapid clicks causing race conditions
+        if (this.isNavigating) return;
+        this.isNavigating = true;
 
-        // Update pages
-        document.querySelectorAll('.page').forEach(page => {
-            page.classList.remove('active');
-        });
-        document.getElementById(`${pageName}-page`).classList.add('active');
+        try {
+            // Update nav items
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
 
-        // Load page-specific content
-        if (pageName === 'analytics') {
-            this.loadAnalytics();
-        } else if (pageName === 'goals') {
-            this.loadGoalsPage();
-        } else if (pageName === 'feed') {
-            this.loadSmartFeed();
+            const targetNav = document.querySelector(`[data-page="${pageName}"]`);
+            if (!targetNav) {
+                throw new Error(`Invalid page: ${pageName}`);
+            }
+            targetNav.classList.add('active');
+
+            // Update pages
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+
+            const targetPage = document.getElementById(`${pageName}-page`);
+            if (!targetPage) {
+                throw new Error(`Page not found: ${pageName}`);
+            }
+            targetPage.classList.add('active');
+
+            // Load page-specific content
+            if (pageName === 'analytics') {
+                await this.loadAnalytics();
+            } else if (pageName === 'goals') {
+                this.loadGoalsPage();
+            } else if (pageName === 'feed') {
+                await this.loadSmartFeed();
+            }
+        } catch (error) {
+            console.error('Navigation error:', error);
+            // Fallback to dashboard if navigation fails
+            if (pageName !== 'dashboard') {
+                this.navigateTo('dashboard');
+            }
+        } finally {
+            this.isNavigating = false;
         }
     }
 
@@ -120,32 +408,56 @@ class ScrollBalancePro {
         // 3. Mood trend (20%)
         // 4. Engagement quality (10%)
 
-        let score = 0;
+        let score = 50; // Start at baseline
 
-        // Goal alignment
+        // Goal alignment (40%)
+        const totalRatings = Math.max(this.userData.contentRatings.length, 1);
         const goalAlignedRatings = this.userData.contentRatings.filter(r => r.aligned).length;
-        const totalRatings = this.userData.contentRatings.length || 1;
         const goalScore = (goalAlignedRatings / totalRatings) * 40;
 
-        // Time management (inverse of screen time)
-        const hours = this.userData.screenTime / 3600;
-        const timeScore = Math.max(0, (1 - hours / 8) * 30);
+        // Time management (30%) - use DAILY stats, not lifetime
+        const dailyHours = (this.userData.dailyStats.screenTime || 0) / 3600;
+        const targetHours = 3; // Reasonable daily target
+        let timeScore;
+        if (dailyHours <= targetHours) {
+            timeScore = 30; // Full points if under target
+        } else {
+            // Gradually decrease as time increases beyond target
+            timeScore = Math.max(0, 30 * (1 - (dailyHours - targetHours) / targetHours));
+        }
 
-        // Mood trend
+        // Mood trend (20%)
+        let moodScore = 10; // Default baseline
         const recentMoods = this.userData.moodHistory.slice(-5);
-        const positiveMoods = recentMoods.filter(m =>
-            ['energized', 'calm', 'focused', 'happy'].includes(m.mood)
-        ).length;
-        const moodScore = (positiveMoods / (recentMoods.length || 1)) * 20;
+        if (recentMoods.length > 0) {
+            const positiveMoods = recentMoods.filter(m =>
+                ['energized', 'calm', 'focused', 'happy'].includes(m.mood)
+            ).length;
+            moodScore = (positiveMoods / recentMoods.length) * 20;
+        }
 
-        // Engagement quality
-        const valuableContent = this.userData.contentRatings.filter(r => r.rating === 'valuable').length;
-        const engagementScore = (valuableContent / totalRatings) * 10;
+        // Engagement quality (10%)
+        let engagementScore = 5; // Default baseline
+        if (totalRatings > 0) {
+            const valuableContent = this.userData.contentRatings.filter(r => r.rating === 'valuable').length;
+            engagementScore = (valuableContent / totalRatings) * 10;
+        }
 
         score = Math.round(goalScore + timeScore + moodScore + engagementScore);
 
+        // Ensure score is within bounds
         this.userData.wellnessScore = Math.max(0, Math.min(100, score));
-        this.userData.dailyStats.wellnessScores.push(this.userData.wellnessScore);
+
+        // Only push score if it changed significantly (avoid array bloat)
+        const lastScore = this.userData.dailyStats.wellnessScores.slice(-1)[0];
+        if (!lastScore || Math.abs(lastScore - this.userData.wellnessScore) > 2) {
+            this.userData.dailyStats.wellnessScores.push(this.userData.wellnessScore);
+
+            // Keep only last 100 scores
+            if (this.userData.dailyStats.wellnessScores.length > 100) {
+                this.userData.dailyStats.wellnessScores = this.userData.dailyStats.wellnessScores.slice(-100);
+            }
+        }
 
         return this.userData.wellnessScore;
     }
@@ -173,14 +485,32 @@ class ScrollBalancePro {
         // Save data
         this.saveData();
         this.saveDailyStats();
+        this.saveHistoricalData();
     }
 
     // ===== TRACKING =====
     startTracking() {
+        // Page visibility tracking
+        document.addEventListener('visibilitychange', () => {
+            this.isVisible = !document.hidden;
+        });
+
+        // User activity tracking
+        ['mousedown', 'keydown', 'scroll', 'touchstart'].forEach(event => {
+            document.addEventListener(event, () => {
+                this.lastInteraction = Date.now();
+            }, { passive: true });
+        });
+
         // Update every second
         setInterval(() => {
-            this.userData.screenTime++;
-            this.userData.dailyStats.screenTime++;
+            // Only track if page is visible and user was active in last 30 seconds
+            const isActive = (Date.now() - this.lastInteraction) < 30000;
+
+            if (this.isVisible && isActive) {
+                this.userData.screenTime++;
+                this.userData.dailyStats.screenTime++;
+            }
 
             // Update every 10 seconds
             if (this.userData.screenTime % 10 === 0) {
@@ -195,7 +525,9 @@ class ScrollBalancePro {
 
         // Update charts every 30 seconds
         setInterval(() => {
-            this.updateCharts();
+            if (this.wellnessChart || this.qualityChart) {
+                this.updateCharts();
+            }
         }, 30000);
     }
 
@@ -215,66 +547,96 @@ class ScrollBalancePro {
 
     // ===== CHARTS =====
     initCharts() {
-        // Wellness trend chart
-        const wellnessCtx = document.getElementById('wellness-chart');
-        if (wellnessCtx && typeof Chart !== 'undefined') {
-            this.wellnessChart = new Chart(wellnessCtx, {
-                type: 'line',
-                data: {
-                    labels: this.getLast7Days(),
-                    datasets: [{
-                        label: 'Wellness Score',
-                        data: this.generateWellnessTrendData(),
-                        borderColor: '#6366f1',
-                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            max: 100,
-                            grid: { color: '#334155' },
-                            ticks: { color: '#94a3b8' }
-                        },
-                        x: {
-                            grid: { color: '#334155' },
-                            ticks: { color: '#94a3b8' }
-                        }
-                    }
-                }
-            });
-        }
+        try {
+            if (typeof Chart === 'undefined') {
+                console.warn('Chart.js not loaded, charts will not be available');
+                return;
+            }
 
-        // Quality donut chart
-        const qualityCtx = document.getElementById('quality-chart');
-        if (qualityCtx && typeof Chart !== 'undefined') {
-            this.qualityChart = new Chart(qualityCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['High Value', 'Medium', 'Low Value'],
-                    datasets: [{
-                        data: [45, 35, 20],
-                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    }
+            // Wellness trend chart
+            const wellnessCtx = document.getElementById('wellness-chart');
+            if (wellnessCtx) {
+                try {
+                    this.wellnessChart = new Chart(wellnessCtx, {
+                        type: 'line',
+                        data: {
+                            labels: this.getLast7Days(),
+                            datasets: [{
+                                label: 'Wellness Score',
+                                data: this.generateWellnessTrendData(),
+                                borderColor: '#6366f1',
+                                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100,
+                                    grid: { color: '#334155' },
+                                    ticks: { color: '#94a3b8' }
+                                },
+                                x: {
+                                    grid: { color: '#334155' },
+                                    ticks: { color: '#94a3b8' }
+                                }
+                            }
+                        }
+                    });
+                } catch (error) {
+                    console.error('Failed to create wellness chart:', error);
                 }
-            });
+            }
+
+            // Quality donut chart
+            const qualityCtx = document.getElementById('quality-chart');
+            if (qualityCtx) {
+                try {
+                    this.qualityChart = new Chart(qualityCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['High Value', 'Medium', 'Low Value'],
+                            datasets: [{
+                                data: [45, 35, 20],
+                                backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false }
+                            }
+                        }
+                    });
+                } catch (error) {
+                    console.error('Failed to create quality chart:', error);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to initialize charts:', error);
+            this.showChartFallback();
         }
+    }
+
+    showChartFallback() {
+        document.querySelectorAll('.chart-container').forEach(container => {
+            if (container && !container.querySelector('canvas')?.getContext) {
+                container.innerHTML = `
+                    <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+                        📊 Charts unavailable. Your data is safe and being tracked.
+                    </div>
+                `;
+            }
+        });
     }
 
     updateCharts() {
@@ -301,12 +663,16 @@ class ScrollBalancePro {
     }
 
     generateWellnessTrendData() {
-        // Generate realistic trending data
-        const baseScore = this.userData.wellnessScore;
+        // Use real historical data for last 7 days
         const data = [];
         for (let i = 6; i >= 0; i--) {
-            const variance = Math.random() * 20 - 10;
-            data.push(Math.max(0, Math.min(100, baseScore + variance - i * 2)));
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateKey = date.toDateString();
+
+            // Get historical score or use current as fallback
+            const historicalScore = this.historicalData[dateKey]?.wellnessScore || this.userData.wellnessScore;
+            data.push(historicalScore);
         }
         return data;
     }
@@ -356,24 +722,63 @@ class ScrollBalancePro {
         if (!container) return;
 
         const allGoals = [
-            { icon: '📚', name: 'Learn Something', description: 'Engage with educational content' },
-            { icon: '😌', name: 'Chill Intentionally', description: 'Mindful relaxation time' },
-            { icon: '🧘', name: 'Reduce Anxiety', description: 'Focus on calming content' },
-            { icon: '⚡', name: 'Be Productive', description: 'Work towards your goals' },
-            { icon: '😴', name: 'Better Sleep', description: 'Wind down properly' }
+            { id: 'learn', icon: '📚', name: 'Learn Something', description: 'Engage with educational content' },
+            { id: 'chill', icon: '😌', name: 'Chill Intentionally', description: 'Mindful relaxation time' },
+            { id: 'reduce-anxiety', icon: '🧘', name: 'Reduce Anxiety', description: 'Focus on calming content' },
+            { id: 'productivity', icon: '⚡', name: 'Be Productive', description: 'Work towards your goals' },
+            { id: 'sleep', icon: '😴', name: 'Better Sleep', description: 'Wind down properly' }
         ];
 
-        container.innerHTML = allGoals.map(goal => `
-            <div class="stat-card">
-                <div class="stat-icon wellness">${goal.icon}</div>
-                <div class="stat-content">
-                    <div class="stat-label">${goal.name}</div>
-                    <div style="font-size: 0.9rem; color: var(--text-secondary);">
-                        ${goal.description}
+        container.innerHTML = allGoals.map(goal => {
+            const isSelected = this.userData.goals.includes(goal.id);
+            return `
+                <div class="goal-card ${isSelected ? 'selected' : ''}" data-goal-id="${goal.id}" style="cursor: pointer; position: relative;">
+                    ${isSelected ? '<div class="goal-checkmark">✓</div>' : ''}
+                    <div class="stat-icon wellness">${goal.icon}</div>
+                    <div class="stat-content">
+                        <div class="stat-label">${goal.name}</div>
+                        <div style="font-size: 0.9rem; color: var(--text-secondary);">
+                            ${goal.description}
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
+
+        // Add click handlers
+        container.querySelectorAll('.goal-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const goalId = card.dataset.goalId;
+                this.toggleGoal(goalId);
+            });
+        });
+    }
+
+    toggleGoal(goalId) {
+        const index = this.userData.goals.indexOf(goalId);
+
+        if (index === -1) {
+            // Add goal
+            this.userData.goals.push(goalId);
+        } else {
+            // Remove goal
+            this.userData.goals.splice(index, 1);
+        }
+
+        // Save changes
+        this.saveData();
+
+        // Refresh goals page display
+        this.loadGoalsPage();
+
+        // Clear feed cache since goals changed
+        this.redditCache.data.clear();
+        this.redditCache.expiresAt.clear();
+
+        // Show feedback
+        this.addActivity('goal', `Updated goals: ${this.userData.goals.join(', ')}`, new Date());
+
+        console.log('Goals updated:', this.userData.goals);
     }
 
     // ===== SMART FEED =====
@@ -396,6 +801,23 @@ class ScrollBalancePro {
         const container = document.getElementById('smart-feed');
         if (!container) return;
 
+        // Create cache key based on filter and goals
+        const cacheKey = `${this.currentFeedFilter}_${this.userData.goals.join(',')}`;
+        const now = Date.now();
+
+        // Check cache first
+        if (this.redditCache.data.has(cacheKey)) {
+            const expiresAt = this.redditCache.expiresAt.get(cacheKey);
+            if (now < expiresAt) {
+                console.log('Using cached Reddit data');
+                this.currentFeedContent = this.redditCache.data.get(cacheKey);
+                this.renderRealFeedContent();
+                return;
+            }
+        }
+
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading real content...</div>';
+
         try {
             // Fetch from multiple subreddits based on goals
             const subreddits = this.getSubredditsForGoals();
@@ -404,6 +826,17 @@ class ScrollBalancePro {
             if (posts.length === 0) {
                 container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">No content available. Try changing filters.</div>';
                 return;
+            }
+
+            // Cache for 5 minutes
+            this.redditCache.data.set(cacheKey, posts);
+            this.redditCache.expiresAt.set(cacheKey, now + 5 * 60 * 1000);
+
+            // Limit cache size to 10 entries
+            if (this.redditCache.data.size > 10) {
+                const oldestKey = this.redditCache.data.keys().next().value;
+                this.redditCache.data.delete(oldestKey);
+                this.redditCache.expiresAt.delete(oldestKey);
             }
 
             this.currentFeedContent = posts;
@@ -448,7 +881,23 @@ class ScrollBalancePro {
 
         for (const subreddit of subreddits.slice(0, 3)) { // Only fetch from 3 to be fast
             try {
+                // Use rate limiter to prevent hitting Reddit's rate limits
+                await this.redditLimiter.throttle();
+
                 const response = await fetch(`https://www.reddit.com/r/${subreddit}/hot.json?limit=5`);
+
+                // Handle rate limiting
+                if (response.status === 429) {
+                    console.warn('Reddit rate limit hit, waiting...');
+                    const retryAfter = response.headers.get('Retry-After') || 60;
+                    await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+                    continue; // Skip this subreddit for now
+                }
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
                 const data = await response.json();
 
                 if (data.data && data.data.children) {
@@ -535,22 +984,31 @@ class ScrollBalancePro {
         const emoji = goalEmojis[item.goal] || '📱';
         const alignedBadge = item.aligned ? '<span class="tag" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">✓ Goal Aligned</span>' : '';
 
+        // Sanitize all user-generated content to prevent XSS
+        const safeAuthor = sanitizeHTML(item.author);
+        const safeSubreddit = sanitizeHTML(item.subreddit);
+        const safeTitle = sanitizeHTML(item.title);
+        const safeContent = item.content ? sanitizeHTML(item.content) : '';
+        const safeUrl = sanitizeHTML(item.url);
+        const safeThumbnail = item.thumbnail ? sanitizeHTML(item.thumbnail) : null;
+        const safeScore = parseInt(item.score) || 0;
+
         return `
-            <div class="content-card" data-id="${item.id}" data-goal="${item.goal}" data-aligned="${item.aligned}" data-url="${item.url}">
+            <div class="content-card" data-id="${sanitizeHTML(item.id)}" data-goal="${sanitizeHTML(item.goal)}" data-aligned="${item.aligned}" data-url="${safeUrl}">
                 <div class="content-header">
                     <div class="content-avatar">${emoji}</div>
                     <div class="content-info">
-                        <div class="content-username">u/${item.author}</div>
-                        <div class="content-goal">r/${item.subreddit}</div>
+                        <div class="content-username">u/${safeAuthor}</div>
+                        <div class="content-goal">r/${safeSubreddit}</div>
                     </div>
                 </div>
                 <div class="content-body">
-                    ${item.thumbnail ? `<img src="${item.thumbnail}" class="content-image" style="width: 100%; height: 300px; object-fit: cover; border-radius: var(--radius-lg); margin-bottom: var(--spacing-md);" />` : `<div class="content-media">${emoji}</div>`}
-                    <div class="content-text"><strong>${item.title}</strong></div>
-                    ${item.content ? `<div style="font-size: 0.9rem; color: var(--text-secondary); margin-top: var(--spacing-sm);">${item.content}...</div>` : ''}
+                    ${safeThumbnail ? `<img src="${safeThumbnail}" class="content-image" style="width: 100%; height: 300px; object-fit: cover; border-radius: var(--radius-lg); margin-bottom: var(--spacing-md);" onerror="this.style.display='none'" />` : `<div class="content-media">${emoji}</div>`}
+                    <div class="content-text"><strong>${safeTitle}</strong></div>
+                    ${safeContent ? `<div style="font-size: 0.9rem; color: var(--text-secondary); margin-top: var(--spacing-sm);">${safeContent}...</div>` : ''}
                     <div class="content-tags">
                         <span class="tag">#${item.goal.replace('-', '')}</span>
-                        <span class="tag">👍 ${item.score}</span>
+                        <span class="tag">👍 ${safeScore}</span>
                         ${alignedBadge}
                     </div>
                 </div>
@@ -965,7 +1423,19 @@ class ScrollBalancePro {
     }
 
     generateHeatmapData() {
-        return Array.from({ length: 7 }, () => Math.random() * 6 + 2);
+        // Use real historical screen time data for last 7 days
+        const data = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateKey = date.toDateString();
+
+            // Get historical screen time in hours
+            const screenTimeSeconds = this.historicalData[dateKey]?.screenTime || 0;
+            const screenTimeHours = screenTimeSeconds / 3600;
+            data.push(Math.round(screenTimeHours * 10) / 10); // Round to 1 decimal
+        }
+        return data;
     }
 
     // ===== MODALS =====
@@ -1016,9 +1486,39 @@ class ScrollBalancePro {
         };
         return scores[mood] || 70;
     }
+
+    // ===== DATA EXPORT =====
+    exportData() {
+        const exportData = {
+            version: '1.0',
+            exportDate: new Date().toISOString(),
+            userData: this.userData,
+            dailyStats: this.userData.dailyStats
+        };
+
+        // Create blob
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+            type: 'application/json'
+        });
+
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `scroll-balance-export-${Date.now()}.json`;
+        a.click();
+
+        // Cleanup
+        URL.revokeObjectURL(url);
+
+        // Show feedback
+        this.addActivity('export', 'Data exported successfully', new Date());
+        console.log('Data exported successfully');
+    }
 }
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    window.scrollBalancePro = new ScrollBalancePro();
+    window.app = new ScrollBalancePro();
+    window.scrollBalancePro = window.app; // Keep backwards compatibility
 });

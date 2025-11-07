@@ -320,6 +320,44 @@ body {
     -webkit-text-fill-color: transparent;
 }
 
+/* Goal Card Selection */
+.goal-card {
+    position: relative;
+    transition: all var(--transition-base);
+}
+
+.goal-card.selected {
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.goal-card.selected::before {
+    transform: scaleX(1);
+}
+
+.goal-checkmark {
+    position: absolute;
+    top: var(--spacing-md);
+    right: var(--spacing-md);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: bold;
+    animation: checkPop 0.3s ease;
+}
+
+@keyframes checkPop {
+    0% { transform: scale(0); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
 .stat-change {
     font-size: 0.8rem;
     display: flex;
@@ -1033,6 +1071,37 @@ input:checked + .slider:before {
     height: 250px !important;
 }
 
+/* ===== KEYBOARD SHORTCUTS ===== */
+kbd {
+    display: inline-block;
+    padding: 4px 8px;
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-shadow: 0 2px 0 var(--border);
+    min-width: 32px;
+    text-align: center;
+}
+
+.shortcut-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-lg);
+    padding: var(--spacing-md) 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.shortcut-row:last-child {
+    border-bottom: none;
+}
+
+.shortcut-row span {
+    color: var(--text-secondary);
+}
+
 /* ===== ABOUT PAGE ===== */
 .about-container {
     max-width: 1000px;
@@ -1214,29 +1283,79 @@ input:checked + .slider:before {
     box-shadow: var(--shadow-md);
 }
 
+/* ===== MOBILE MENU ===== */
+.mobile-menu-toggle {
+    display: none;
+    position: fixed;
+    top: var(--spacing-lg);
+    left: var(--spacing-lg);
+    z-index: 1001;
+    background: var(--primary);
+    color: white;
+    border: none;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 1.5rem;
+    box-shadow: var(--shadow-lg);
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 1024px) {
     body {
         grid-template-columns: 1fr;
     }
 
+    .mobile-menu-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
     .sidebar {
-        display: none;
+        position: fixed;
+        left: -300px;
+        top: 0;
+        height: 100vh;
+        z-index: 1000;
+        transition: left 0.3s ease;
+        box-shadow: var(--shadow-xl);
+    }
+
+    .sidebar.mobile-open {
+        left: 0;
+    }
+
+    .main-content {
+        margin-left: 0;
+        padding-top: 70px; /* Space for mobile toggle */
     }
 
     .charts-row,
     .insights-row {
         grid-template-columns: 1fr;
     }
+
+    /* Larger touch targets for mobile */
+    .nav-item,
+    .filter-btn,
+    .action-btn,
+    button {
+        min-height: 44px;
+        min-width: 44px;
+    }
 }
 
 @media (max-width: 768px) {
     .main-content {
         padding: var(--spacing-lg);
+        padding-top: 70px;
     }
 
     .stats-grid {
         grid-template-columns: 1fr;
+        gap: var(--spacing-md);
     }
 
     .mood-grid {
@@ -1255,6 +1374,10 @@ input:checked + .slider:before {
         font-size: 1.5rem;
     }
 
+    .about-section p {
+        font-size: 1rem;
+    }
+
     .principles-grid {
         grid-template-columns: 1fr;
     }
@@ -1270,5 +1393,34 @@ input:checked + .slider:before {
 
     .cta-buttons button {
         width: 100%;
+    }
+
+    /* Mobile-friendly content cards */
+    .content-card {
+        margin: 0 auto;
+        max-width: 100%;
+    }
+
+    .content-image {
+        height: 200px !important;
+    }
+
+    /* Mobile-friendly charts */
+    .chart-card {
+        min-height: 250px;
+    }
+
+    canvas {
+        max-height: 200px !important;
+    }
+
+    /* Mobile goal cards */
+    .goals-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Mobile settings */
+    .settings-section {
+        padding: var(--spacing-lg);
     }
 }

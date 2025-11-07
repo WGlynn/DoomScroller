@@ -13,6 +13,62 @@ Scroll Balance is a protocol designed to help people find a healthier balance be
 - **Values quality over quantity** - Not all screen time is equal
 - **Gamifies wellbeing** - Level up by making better choices
 
+## 🚀 Quick Start Guide
+
+### Step 1: Download the Files
+
+**Option A: Using Git (Recommended)**
+```bash
+# Clone the repository
+git clone https://github.com/WGlynn/DoomScroller.git
+
+# Navigate into the folder
+cd DoomScroller
+```
+
+**Option B: Download ZIP**
+1. Go to the GitHub repository page
+2. Click the green "Code" button
+3. Click "Download ZIP"
+4. Extract the ZIP file to a folder on your computer
+5. Open your terminal/command prompt and navigate to that folder
+
+### Step 2: Open the Dashboard App
+
+**Option 1: Simple HTTP Server (Recommended)**
+```bash
+# Make sure you're in the DoomScroller folder
+# Then run:
+python3 -m http.server 8000
+
+# Open your browser and go to:
+# http://localhost:8000
+```
+
+**Option 2: Just Double-Click**
+- Simply double-click `index.html` in the file explorer
+- It will open in your default browser
+
+### Step 3: Install the Browser Extension (Optional)
+
+1. Open Chrome or any Chromium browser (Edge, Brave, etc.)
+2. Go to `chrome://extensions/` (or `edge://extensions/`, etc.)
+3. Toggle on **"Developer mode"** in the top right corner
+4. Click **"Load unpacked"**
+5. Navigate to the `DoomScroller/extension/` folder and select it
+6. The extension is now installed!
+7. Visit TikTok, Instagram, Twitter, YouTube, or Reddit to see it in action
+
+### Step 4: Start Using Scroll Balance
+
+1. Open the dashboard in your browser
+2. Set your personal wellness goals (Settings page)
+3. Browse the Smart Feed to see real Reddit content
+4. Rate content and earn XP
+5. Track your wellness score and progress
+
+That's it! You're ready to build healthier digital habits.
+
 ## Features
 
 ### 📊 Dashboard App
@@ -36,34 +92,17 @@ Scroll Balance is a protocol designed to help people find a healthier balance be
 
 ## How to Run
 
-### Dashboard App
+**New users:** See the [🚀 Quick Start Guide](#-quick-start-guide) above for detailed step-by-step instructions.
 
-```bash
-# Option 1: Simple HTTP server (recommended)
-python3 -m http.server 8000
-# Then visit http://localhost:8000
-
-# Option 2: Just open the file
-open index.html
-
-# Option 3: Use any local server
-npx serve
-```
-
-### Browser Extension
-
-1. Open Chrome and go to `chrome://extensions/`
-2. Enable "Developer mode" (top right toggle)
-3. Click "Load unpacked"
-4. Select the `extension/` folder
-5. Visit TikTok, Instagram, or Twitter to see it in action!
-
-See `extension/README.md` for more details.
+**Quick reference:**
+- Dashboard: `python3 -m http.server 8000` then open `http://localhost:8000`
+- Extension: Load `extension/` folder in Chrome via `chrome://extensions/`
+- See `extension/README.md` for more details
 
 ## How It Works
 
 1. **Onboarding** - Select your personal goals
-2. **Feed** - Browse mock social content (simulates TikTok/Instagram style)
+2. **Feed** - Browse real content from Reddit based on your goals
 3. **Rate Content** - Mark content as valuable or skip it
 4. **Earn XP** - Get more points for engaging with goal-aligned content
 5. **Friction Kicks In** - After 20 minutes, you're prompted to reflect
