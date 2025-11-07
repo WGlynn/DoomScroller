@@ -7,6 +7,11 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- Mobile Menu Toggle -->
+    <button class="mobile-menu-toggle" onclick="app.toggleMobileMenu()" aria-label="Toggle menu">
+        ☰
+    </button>
+
     <!-- Sidebar Navigation -->
     <nav class="sidebar">
         <div class="sidebar-header">
@@ -245,6 +250,17 @@
                     <div class="extension-info">
                         <p>Install the browser extension to track real social media usage.</p>
                         <button class="primary-btn">Install Extension</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Data Management</h3>
+                    <div class="data-management">
+                        <p>Export your data for backup or analysis. Your data will be downloaded as a JSON file.</p>
+                        <button class="primary-btn" onclick="app.exportData()">📥 Export My Data</button>
+                        <div style="margin-top: var(--spacing-md); font-size: 0.85rem; color: var(--text-secondary);">
+                            Includes: XP, goals, wellness scores, mood history, and content ratings
+                        </div>
                     </div>
                 </div>
             </div>

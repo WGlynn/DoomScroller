@@ -69,12 +69,16 @@ class ScrollBalancePro {
             expiresAt: new Map()
         };
 
+        // Historical data for charts
+        this.historicalData = this.loadHistoricalData();
+
         this.init();
     }
 
     init() {
         this.loadData();
         this.setupNavigation();
+        this.setupKeyboardShortcuts();
         this.setupModals();
         this.initCharts();
         this.updateAllStats();
@@ -85,6 +89,126 @@ class ScrollBalancePro {
         // Preload analytics charts if we're on that page
         if (document.getElementById('analytics-page')?.classList.contains('active')) {
             setTimeout(() => this.loadAnalytics(), 100);
+        }
+    }
+
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Don't trigger in input fields or textareas
+            if (e.target.matches('input, textarea')) return;
+
+            // Navigation shortcuts
+            switch(e.key) {
+                case '1':
+                    e.preventDefault();
+                    this.navigateTo('dashboard');
+                    break;
+                case '2':
+                    e.preventDefault();
+                    this.navigateTo('feed');
+                    break;
+                case '3':
+                    e.preventDefault();
+                    this.navigateTo('analytics');
+                    break;
+                case '4':
+                    e.preventDefault();
+                    this.navigateTo('goals');
+                    break;
+                case '5':
+                    e.preventDefault();
+                    this.navigateTo('settings');
+                    break;
+                case '6':
+                    e.preventDefault();
+                    this.navigateTo('about');
+                    break;
+                case '?':
+                    e.preventDefault();
+                    this.showKeyboardHelp();
+                    break;
+                case 'Escape':
+                    // Close any open modals
+                    this.closeReflectionModal();
+                    this.closeKeyboardHelp();
+                    break;
+            }
+        });
+    }
+
+    showKeyboardHelp() {
+        let helpModal = document.getElementById('keyboard-help-modal');
+
+        if (!helpModal) {
+            helpModal = document.createElement('div');
+            helpModal.id = 'keyboard-help-modal';
+            helpModal.className = 'modal active';
+            helpModal.innerHTML = `
+                <div class="modal-content modern">
+                    <button class="modal-close" onclick="app.closeKeyboardHelp()">&times;</button>
+                    <h2>⌨️ Keyboard Shortcuts</h2>
+                    <div style="margin-top: var(--spacing-xl);">
+                        <div class="shortcut-row">
+                            <kbd>1</kbd>
+                            <span>Go to Dashboard</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <kbd>2</kbd>
+                            <span>Go to Smart Feed</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <kbd>3</kbd>
+                            <span>Go to Analytics</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <kbd>4</kbd>
+                            <span>Go to Goals</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <kbd>5</kbd>
+                            <span>Go to Settings</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <kbd>6</kbd>
+                            <span>Go to About</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <kbd>?</kbd>
+                            <span>Show this help</span>
+                        </div>
+                        <div class="shortcut-row">
+                            <kbd>Esc</kbd>
+                            <span>Close modals</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(helpModal);
+        } else {
+            helpModal.classList.add('active');
+        }
+    }
+
+    closeKeyboardHelp() {
+        const helpModal = document.getElementById('keyboard-help-modal');
+        if (helpModal) {
+            helpModal.classList.remove('active');
+        }
+    }
+
+    // ===== MOBILE MENU =====
+    toggleMobileMenu() {
+        const sidebar = document.querySelector('.sidebar');
+        sidebar.classList.toggle('mobile-open');
+
+        // Close menu when clicking nav items
+        if (sidebar.classList.contains('mobile-open')) {
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    sidebar.classList.remove('mobile-open');
+                }, { once: true });
+            });
         }
     }
 
@@ -168,6 +292,50 @@ class ScrollBalancePro {
             contentViewed: 0,
             wellnessScores: [85]
         };
+    }
+
+    loadHistoricalData() {
+        const saved = localStorage.getItem('historicalData');
+        if (saved) {
+            return JSON.parse(saved);
+        }
+
+        // Initialize with some baseline data for the last 7 days
+        const historical = {};
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateKey = date.toDateString();
+            historical[dateKey] = {
+                wellnessScore: 85,
+                screenTime: 0,
+                xpEarned: 0
+            };
+        }
+        return historical;
+    }
+
+    saveHistoricalData() {
+        if (!this.historicalData) {
+            this.historicalData = this.loadHistoricalData();
+        }
+
+        // Save today's data
+        const today = new Date().toDateString();
+        this.historicalData[today] = {
+            wellnessScore: this.userData.wellnessScore,
+            screenTime: this.userData.dailyStats.screenTime,
+            xpEarned: this.userData.xp
+        };
+
+        // Keep only last 90 days
+        const dates = Object.keys(this.historicalData).sort();
+        if (dates.length > 90) {
+            const toRemove = dates.slice(0, dates.length - 90);
+            toRemove.forEach(date => delete this.historicalData[date]);
+        }
+
+        localStorage.setItem('historicalData', JSON.stringify(this.historicalData));
     }
 
     saveDailyStats() {
@@ -317,6 +485,7 @@ class ScrollBalancePro {
         // Save data
         this.saveData();
         this.saveDailyStats();
+        this.saveHistoricalData();
     }
 
     // ===== TRACKING =====
@@ -494,12 +663,16 @@ class ScrollBalancePro {
     }
 
     generateWellnessTrendData() {
-        // Generate realistic trending data
-        const baseScore = this.userData.wellnessScore;
+        // Use real historical data for last 7 days
         const data = [];
         for (let i = 6; i >= 0; i--) {
-            const variance = Math.random() * 20 - 10;
-            data.push(Math.max(0, Math.min(100, baseScore + variance - i * 2)));
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateKey = date.toDateString();
+
+            // Get historical score or use current as fallback
+            const historicalScore = this.historicalData[dateKey]?.wellnessScore || this.userData.wellnessScore;
+            data.push(historicalScore);
         }
         return data;
     }
@@ -549,24 +722,63 @@ class ScrollBalancePro {
         if (!container) return;
 
         const allGoals = [
-            { icon: '📚', name: 'Learn Something', description: 'Engage with educational content' },
-            { icon: '😌', name: 'Chill Intentionally', description: 'Mindful relaxation time' },
-            { icon: '🧘', name: 'Reduce Anxiety', description: 'Focus on calming content' },
-            { icon: '⚡', name: 'Be Productive', description: 'Work towards your goals' },
-            { icon: '😴', name: 'Better Sleep', description: 'Wind down properly' }
+            { id: 'learn', icon: '📚', name: 'Learn Something', description: 'Engage with educational content' },
+            { id: 'chill', icon: '😌', name: 'Chill Intentionally', description: 'Mindful relaxation time' },
+            { id: 'reduce-anxiety', icon: '🧘', name: 'Reduce Anxiety', description: 'Focus on calming content' },
+            { id: 'productivity', icon: '⚡', name: 'Be Productive', description: 'Work towards your goals' },
+            { id: 'sleep', icon: '😴', name: 'Better Sleep', description: 'Wind down properly' }
         ];
 
-        container.innerHTML = allGoals.map(goal => `
-            <div class="stat-card">
-                <div class="stat-icon wellness">${goal.icon}</div>
-                <div class="stat-content">
-                    <div class="stat-label">${goal.name}</div>
-                    <div style="font-size: 0.9rem; color: var(--text-secondary);">
-                        ${goal.description}
+        container.innerHTML = allGoals.map(goal => {
+            const isSelected = this.userData.goals.includes(goal.id);
+            return `
+                <div class="goal-card ${isSelected ? 'selected' : ''}" data-goal-id="${goal.id}" style="cursor: pointer; position: relative;">
+                    ${isSelected ? '<div class="goal-checkmark">✓</div>' : ''}
+                    <div class="stat-icon wellness">${goal.icon}</div>
+                    <div class="stat-content">
+                        <div class="stat-label">${goal.name}</div>
+                        <div style="font-size: 0.9rem; color: var(--text-secondary);">
+                            ${goal.description}
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
+
+        // Add click handlers
+        container.querySelectorAll('.goal-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const goalId = card.dataset.goalId;
+                this.toggleGoal(goalId);
+            });
+        });
+    }
+
+    toggleGoal(goalId) {
+        const index = this.userData.goals.indexOf(goalId);
+
+        if (index === -1) {
+            // Add goal
+            this.userData.goals.push(goalId);
+        } else {
+            // Remove goal
+            this.userData.goals.splice(index, 1);
+        }
+
+        // Save changes
+        this.saveData();
+
+        // Refresh goals page display
+        this.loadGoalsPage();
+
+        // Clear feed cache since goals changed
+        this.redditCache.data.clear();
+        this.redditCache.expiresAt.clear();
+
+        // Show feedback
+        this.addActivity('goal', `Updated goals: ${this.userData.goals.join(', ')}`, new Date());
+
+        console.log('Goals updated:', this.userData.goals);
     }
 
     // ===== SMART FEED =====
@@ -1211,7 +1423,19 @@ class ScrollBalancePro {
     }
 
     generateHeatmapData() {
-        return Array.from({ length: 7 }, () => Math.random() * 6 + 2);
+        // Use real historical screen time data for last 7 days
+        const data = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateKey = date.toDateString();
+
+            // Get historical screen time in hours
+            const screenTimeSeconds = this.historicalData[dateKey]?.screenTime || 0;
+            const screenTimeHours = screenTimeSeconds / 3600;
+            data.push(Math.round(screenTimeHours * 10) / 10); // Round to 1 decimal
+        }
+        return data;
     }
 
     // ===== MODALS =====
@@ -1262,9 +1486,39 @@ class ScrollBalancePro {
         };
         return scores[mood] || 70;
     }
+
+    // ===== DATA EXPORT =====
+    exportData() {
+        const exportData = {
+            version: '1.0',
+            exportDate: new Date().toISOString(),
+            userData: this.userData,
+            dailyStats: this.userData.dailyStats
+        };
+
+        // Create blob
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+            type: 'application/json'
+        });
+
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `scroll-balance-export-${Date.now()}.json`;
+        a.click();
+
+        // Cleanup
+        URL.revokeObjectURL(url);
+
+        // Show feedback
+        this.addActivity('export', 'Data exported successfully', new Date());
+        console.log('Data exported successfully');
+    }
 }
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    window.scrollBalancePro = new ScrollBalancePro();
+    window.app = new ScrollBalancePro();
+    window.scrollBalancePro = window.app; // Keep backwards compatibility
 });
