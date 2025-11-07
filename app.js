@@ -1478,6 +1478,61 @@ class ScrollBalancePro {
                 if (url) window.open(url, '_blank');
             });
         });
+
+        // Start engagement tracking for all cards
+        this.startEngagementTracking();
+    }
+
+    startEngagementTracking() {
+        // Clear any existing tracker
+        if (this.engagementTracker) {
+            clearInterval(this.engagementTracker);
+        }
+
+        // Track engagement every 100ms
+        this.engagementTracker = setInterval(() => {
+            const cards = document.querySelectorAll('.content-card');
+            cards.forEach(card => {
+                const viewStart = parseInt(card.dataset.viewStart);
+                const expectedTime = parseInt(card.dataset.expectedTime);
+                const now = Date.now();
+                const elapsed = (now - viewStart) / 1000; // seconds
+
+                // Update progress bar
+                const progress = Math.min((elapsed / expectedTime) * 100, 100);
+                const progressBar = card.querySelector('.engagement-bar');
+                if (progressBar) {
+                    progressBar.style.width = `${progress}%`;
+
+                    // Change color as they read
+                    if (progress >= 100) {
+                        progressBar.style.background = 'linear-gradient(90deg, #10b981, #059669)'; // Green
+                    } else if (progress >= 70) {
+                        progressBar.style.background = 'linear-gradient(90deg, #f59e0b, #d97706)'; // Orange
+                    } else {
+                        progressBar.style.background = 'linear-gradient(90deg, #6366f1, #4f46e5)'; // Blue
+                    }
+                }
+
+                // Update text
+                const engagementText = card.querySelector('.engagement-text');
+                if (engagementText && elapsed < expectedTime) {
+                    const remaining = Math.ceil(expectedTime - elapsed);
+                    engagementText.textContent = `Read mindfully... (${remaining}s)`;
+                } else if (engagementText && elapsed >= expectedTime) {
+                    engagementText.textContent = '✅ Ready to rate!';
+                    engagementText.style.color = '#10b981';
+                }
+
+                // Enable buttons after sufficient time
+                if (elapsed >= expectedTime) {
+                    const valuableBtn = card.querySelector('.action-btn.valuable');
+                    const skipBtn = card.querySelector('.action-btn.skip');
+                    if (valuableBtn) valuableBtn.disabled = false;
+                    if (skipBtn) skipBtn.disabled = false;
+                }
+            });
+        }, 100);
     }
 
     createRealContentCard(item) {
@@ -1501,8 +1556,18 @@ class ScrollBalancePro {
         const safeThumbnail = item.thumbnail ? sanitizeHTML(item.thumbnail) : null;
         const safeScore = parseInt(item.score) || 0;
 
+        // Calculate expected reading time
+        const wordCount = safeTitle.split(' ').length + (safeContent.split(' ').length);
+        const expectedSeconds = Math.max(Math.ceil(wordCount / 3), 8); // Minimum 8 seconds for real content
+
         return `
-            <div class="content-card" data-id="${sanitizeHTML(item.id)}" data-goal="${sanitizeHTML(item.goal)}" data-aligned="${item.aligned}" data-url="${safeUrl}">
+            <div class="content-card"
+                 data-id="${sanitizeHTML(item.id)}"
+                 data-goal="${sanitizeHTML(item.goal)}"
+                 data-aligned="${item.aligned}"
+                 data-url="${safeUrl}"
+                 data-expected-time="${expectedSeconds}"
+                 data-view-start="${Date.now()}">
                 <div class="content-header">
                     <div class="content-avatar">${emoji}</div>
                     <div class="content-info">
@@ -1511,7 +1576,7 @@ class ScrollBalancePro {
                     </div>
                 </div>
                 <div class="content-body">
-                    ${safeThumbnail ? `<img src="${safeThumbnail}" class="content-image" style="width: 100%; height: 300px; object-fit: cover; border-radius: var(--radius-lg); margin-bottom: var(--spacing-md);" onerror="this.style.display='none'" />` : `<div class="content-media">${emoji}</div>`}
+                    ${safeThumbnail ? `<img src="${safeThumbnail}" class="content-image" style="width: 100%; height: 300px; object-fit: cover; border-radius: var(--radius-lg); margin-bottom: var(--spacing-md);" />` : `<div class="content-media">${emoji}</div>`}
                     <div class="content-text"><strong>${safeTitle}</strong></div>
                     ${safeContent ? `<div style="font-size: 0.9rem; color: var(--text-secondary); margin-top: var(--spacing-sm);">${safeContent}...</div>` : ''}
                     <div class="content-tags">
@@ -1520,9 +1585,15 @@ class ScrollBalancePro {
                         ${alignedBadge}
                     </div>
                 </div>
+                <div class="engagement-indicator">
+                    <div class="engagement-bar-container">
+                        <div class="engagement-bar" style="width: 0%"></div>
+                    </div>
+                    <div class="engagement-text">Take time to read and reflect... (${expectedSeconds}s)</div>
+                </div>
                 <div class="content-actions">
-                    <button class="action-btn valuable">👍 Valuable</button>
-                    <button class="action-btn skip">👎 Skip</button>
+                    <button class="action-btn valuable" disabled>👍 Valuable</button>
+                    <button class="action-btn skip" disabled>👎 Skip</button>
                     <button class="action-btn view" style="background: rgba(99, 102, 241, 0.1); border-color: var(--primary); color: var(--primary);">🔗 View</button>
                 </div>
             </div>
@@ -1566,6 +1637,9 @@ class ScrollBalancePro {
                 this.rateContent(card, 'skip');
             });
         });
+
+        // Start engagement tracking for all cards
+        this.startEngagementTracking();
     }
 
     generateFeedContent(count) {
@@ -1668,8 +1742,17 @@ class ScrollBalancePro {
     createContentCard(item) {
         const alignedBadge = item.aligned ? '<span class="tag" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">✓ Goal Aligned</span>' : '';
 
+        // Calculate expected reading time (rough estimate: 3 words per second for comprehension)
+        const wordCount = item.title.split(' ').length;
+        const expectedSeconds = Math.max(Math.ceil(wordCount / 3), 5); // Minimum 5 seconds
+
         return `
-            <div class="content-card" data-id="${item.id}" data-goal="${item.goal}" data-aligned="${item.aligned}">
+            <div class="content-card"
+                 data-id="${item.id}"
+                 data-goal="${item.goal}"
+                 data-aligned="${item.aligned}"
+                 data-expected-time="${expectedSeconds}"
+                 data-view-start="${Date.now()}">
                 <div class="content-header">
                     <div class="content-avatar">${item.emoji}</div>
                     <div class="content-info">
@@ -1686,9 +1769,15 @@ class ScrollBalancePro {
                         ${alignedBadge}
                     </div>
                 </div>
+                <div class="engagement-indicator">
+                    <div class="engagement-bar-container">
+                        <div class="engagement-bar" style="width: 0%"></div>
+                    </div>
+                    <div class="engagement-text">Take time to read and reflect... (${expectedSeconds}s)</div>
+                </div>
                 <div class="content-actions">
-                    <button class="action-btn valuable">👍 Valuable</button>
-                    <button class="action-btn skip">👎 Skip</button>
+                    <button class="action-btn valuable" disabled>👍 Valuable</button>
+                    <button class="action-btn skip" disabled>👎 Skip</button>
                 </div>
             </div>
         `;
@@ -1700,7 +1789,13 @@ class ScrollBalancePro {
         const contentId = card.dataset.id;
         const currentHour = new Date().getHours();
 
-        // Record rating with enhanced metadata
+        // Calculate engagement time
+        const viewStart = parseInt(card.dataset.viewStart);
+        const expectedTime = parseInt(card.dataset.expectedTime);
+        const actualTime = (Date.now() - viewStart) / 1000; // in seconds
+        const engagementRatio = actualTime / expectedTime;
+
+        // Record rating with enhanced metadata including engagement
         const ratingData = {
             id: contentId,
             goal: goal,
@@ -1708,7 +1803,10 @@ class ScrollBalancePro {
             rating: rating,
             timestamp: Date.now(),
             hour: currentHour,
-            sessionTime: Date.now() - this.sessionStartTime
+            sessionTime: Date.now() - this.sessionStartTime,
+            engagementTime: actualTime,
+            expectedTime: expectedTime,
+            engagementRatio: engagementRatio
         };
 
         this.userData.contentRatings.push(ratingData);
@@ -1737,17 +1835,32 @@ class ScrollBalancePro {
             this.userData.qualityStreakCurrent = 0;
         }
 
-        // Award XP with streak multipliers
+        // Award XP based on mindful engagement
         let xpGained = 0;
         let baseXP = 0;
         let multiplier = 1;
+        let bonusText = '';
 
         if (rating === 'valuable') {
             baseXP = isAligned ? 15 : 5;
 
+            // Engagement bonus: reward taking time to read
+            let engagementBonus = 0;
+            if (engagementRatio >= 1.0) {
+                // Spent expected time or more - REWARD mindful reading
+                engagementBonus = 0.5;
+                bonusText = 'Mindful reading bonus! ';
+            } else if (engagementRatio >= 0.7) {
+                // Decent engagement
+                engagementBonus = 0.2;
+            }
+            // No penalty for quick reading, just no bonus
+
+            multiplier += engagementBonus;
+
             // Streak multipliers
-            if (this.userData.streak >= 30) multiplier = 3;
-            else if (this.userData.streak >= 7) multiplier = 2;
+            if (this.userData.streak >= 30) multiplier += 2; // Changed from = to += to stack with engagement
+            else if (this.userData.streak >= 7) multiplier += 1;
 
             // Quality streak bonus
             if (this.userData.qualityStreakCurrent >= 5) {
@@ -1757,18 +1870,22 @@ class ScrollBalancePro {
             xpGained = Math.round(baseXP * multiplier);
             this.userData.xp += xpGained;
 
-            const bonusText = multiplier > 1 ? ` (${multiplier}x bonus!)` : '';
-            this.addActivity('xp', `Earned ${xpGained} XP${bonusText}`, new Date());
+            if (multiplier > 1) {
+                bonusText += `${multiplier.toFixed(1)}x bonus!`;
+            }
+
+            this.addActivity('xp', `Earned ${xpGained} XP${bonusText ? ' (' + bonusText + ')' : ''}`, new Date());
         } else if (rating === 'skip') {
             if (!isAligned) {
+                // Small XP for skipping non-aligned content
                 xpGained = 3;
                 this.userData.xp += xpGained;
             }
         }
 
-        // Show XP gain animation
+        // Show XP gain animation with engagement feedback
         if (xpGained > 0) {
-            this.showXPAnimation(card, xpGained, multiplier);
+            this.showXPAnimation(card, xpGained, multiplier, engagementRatio);
         }
 
         // Visual feedback
