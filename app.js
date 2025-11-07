@@ -1623,7 +1623,7 @@ class ScrollBalancePro {
                 </div>
                 <div class="content-actions">
                     <button class="action-btn valuable" disabled>👍 Valuable</button>
-                    <button class="action-btn skip" disabled>👎 Skip</button>
+                    <button class="action-btn skip" disabled>👎 Brain-rot</button>
                     <button class="action-btn view" style="background: rgba(99, 102, 241, 0.1); border-color: var(--primary); color: var(--primary);">🔗 View</button>
                 </div>
             </div>
@@ -1806,7 +1806,7 @@ class ScrollBalancePro {
                 </div>
                 <div class="content-actions">
                     <button class="action-btn valuable" disabled>👍 Valuable</button>
-                    <button class="action-btn skip" disabled>👎 Skip</button>
+                    <button class="action-btn skip" disabled>👎 Brain-rot</button>
                 </div>
             </div>
         `;
