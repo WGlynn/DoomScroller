@@ -1130,14 +1130,20 @@ class ScrollBalancePro {
 
     updateCharts() {
         if (this.wellnessChart) {
-            this.wellnessChart.data.datasets[0].data = this.generateWellnessTrendData();
-            this.wellnessChart.update();
+            // Custom chart library doesn't have update(), so we recreate the chart
+            if (typeof this.wellnessChart.update === 'function') {
+                this.wellnessChart.data.datasets[0].data = this.generateWellnessTrendData();
+                this.wellnessChart.update();
+            }
         }
 
         if (this.qualityChart) {
-            const stats = this.calculateContentQuality();
-            this.qualityChart.data.datasets[0].data = [stats.high, stats.medium, stats.low];
-            this.qualityChart.update();
+            // Custom chart library doesn't have update(), so we recreate the chart
+            if (typeof this.qualityChart.update === 'function') {
+                const stats = this.calculateContentQuality();
+                this.qualityChart.data.datasets[0].data = [stats.high, stats.medium, stats.low];
+                this.qualityChart.update();
+            }
         }
     }
 
