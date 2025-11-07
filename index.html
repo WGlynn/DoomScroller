@@ -3,93 +3,286 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scroll Balance - Anti-Doomscroll Protocol</title>
+    <title>Scroll Balance Pro - Digital Wellness Dashboard</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Onboarding Screen -->
-    <div id="onboarding" class="screen active">
-        <div class="container">
-            <h1>🎯 Scroll Balance</h1>
-            <p class="subtitle">Find balance in your digital life</p>
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo-container">
+                <div class="logo-icon">⚖️</div>
+                <h1 class="logo-text">Scroll Balance</h1>
+            </div>
+        </div>
 
-            <div class="goal-selection">
-                <h2>Choose Your Goals</h2>
-                <p>Select what matters to you:</p>
+        <div class="nav-items">
+            <a href="#" class="nav-item active" data-page="dashboard">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">Dashboard</span>
+            </a>
+            <a href="#" class="nav-item" data-page="feed">
+                <span class="nav-icon">📱</span>
+                <span class="nav-label">Smart Feed</span>
+            </a>
+            <a href="#" class="nav-item" data-page="analytics">
+                <span class="nav-icon">📈</span>
+                <span class="nav-label">Analytics</span>
+            </a>
+            <a href="#" class="nav-item" data-page="goals">
+                <span class="nav-icon">🎯</span>
+                <span class="nav-label">Goals</span>
+            </a>
+            <a href="#" class="nav-item" data-page="settings">
+                <span class="nav-icon">⚙️</span>
+                <span class="nav-label">Settings</span>
+            </a>
+        </div>
 
-                <div class="goals">
-                    <button class="goal-btn" data-goal="learn">📚 Learn Something</button>
-                    <button class="goal-btn" data-goal="chill">😌 Chill Intentionally</button>
-                    <button class="goal-btn" data-goal="reduce-anxiety">🧘 Reduce Anxiety</button>
-                    <button class="goal-btn" data-goal="productivity">⚡ Be Productive</button>
-                    <button class="goal-btn" data-goal="sleep">😴 Better Sleep</button>
+        <div class="sidebar-footer">
+            <div class="user-profile">
+                <div class="user-avatar">👤</div>
+                <div class="user-info">
+                    <div class="user-name">Mindful User</div>
+                    <div class="user-level">Level <span id="sidebar-level">1</span></div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Dashboard Page -->
+        <div class="page active" id="dashboard-page">
+            <!-- Top Stats Bar -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon wellness">🧘</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Wellness Score</div>
+                        <div class="stat-value" id="wellness-score">85</div>
+                        <div class="stat-change positive">+5% from yesterday</div>
+                    </div>
                 </div>
 
-                <button id="start-btn" class="primary-btn" disabled>Start Scrolling Mindfully</button>
+                <div class="stat-card">
+                    <div class="stat-icon time">⏱️</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Screen Time Today</div>
+                        <div class="stat-value" id="screen-time">2h 34m</div>
+                        <div class="stat-change negative">+12% from avg</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon xp">⚡</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Total XP</div>
+                        <div class="stat-value" id="total-xp">2,450</div>
+                        <div class="stat-change positive">+150 today</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon streak">🔥</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Current Streak</div>
+                        <div class="stat-value" id="streak">7 days</div>
+                        <div class="stat-change positive">Keep it up!</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="charts-row">
+                <div class="chart-card large">
+                    <div class="chart-header">
+                        <h3>Wellness Trend</h3>
+                        <select class="timeframe-select">
+                            <option>Last 7 days</option>
+                            <option>Last 30 days</option>
+                            <option>Last 90 days</option>
+                        </select>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="wellness-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Content Quality</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="quality-chart"></canvas>
+                    </div>
+                    <div class="quality-breakdown">
+                        <div class="quality-item">
+                            <span class="quality-dot high"></span>
+                            <span>High Value: 45%</span>
+                        </div>
+                        <div class="quality-item">
+                            <span class="quality-dot medium"></span>
+                            <span>Medium: 35%</span>
+                        </div>
+                        <div class="quality-item">
+                            <span class="quality-dot low"></span>
+                            <span>Low Value: 20%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Insights & Goals -->
+            <div class="insights-row">
+                <div class="insights-card">
+                    <h3>💡 Today's Insights</h3>
+                    <div class="insight-list" id="insights-list">
+                        <div class="insight-item">
+                            <div class="insight-icon success">✓</div>
+                            <div class="insight-text">
+                                <strong>Great work!</strong> You spent 65% of your time on goal-aligned content.
+                            </div>
+                        </div>
+                        <div class="insight-item">
+                            <div class="insight-icon warning">⚠</div>
+                            <div class="insight-text">
+                                <strong>Watch out:</strong> Your evening scroll sessions are getting longer.
+                            </div>
+                        </div>
+                        <div class="insight-item">
+                            <div class="insight-icon info">ℹ</div>
+                            <div class="insight-text">
+                                <strong>Tip:</strong> Try a 10-minute walk before your next scroll session.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="goals-progress-card">
+                    <h3>🎯 Active Goals Progress</h3>
+                    <div class="goals-list" id="goals-progress">
+                        <!-- Dynamic goals will be inserted here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="activity-card">
+                <h3>Recent Activity</h3>
+                <div class="activity-timeline" id="activity-timeline">
+                    <!-- Activity items will be inserted dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Feed Page (Enhanced) -->
+        <div class="page" id="feed-page">
+            <div class="feed-header">
+                <h2>Smart Feed</h2>
+                <div class="feed-controls">
+                    <button class="filter-btn active">All</button>
+                    <button class="filter-btn">Goal-Aligned</button>
+                    <button class="filter-btn">Educational</button>
+                </div>
+            </div>
+            <div class="content-feed" id="smart-feed">
+                <!-- Feed content -->
+            </div>
+        </div>
+
+        <!-- Analytics Page -->
+        <div class="page" id="analytics-page">
+            <h2>Deep Analytics</h2>
+            <div class="analytics-grid">
+                <div class="analytics-card">
+                    <h3>Usage Patterns</h3>
+                    <canvas id="usage-heatmap"></canvas>
+                </div>
+                <div class="analytics-card">
+                    <h3>Time Distribution</h3>
+                    <canvas id="time-distribution"></canvas>
+                </div>
+                <div class="analytics-card">
+                    <h3>Mood Tracking</h3>
+                    <canvas id="mood-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Goals Page -->
+        <div class="page" id="goals-page">
+            <h2>Your Goals</h2>
+            <div class="goals-grid">
+                <!-- Goals cards will be inserted -->
+            </div>
+        </div>
+
+        <!-- Settings Page -->
+        <div class="page" id="settings-page">
+            <h2>Settings</h2>
+            <div class="settings-sections">
+                <div class="settings-section">
+                    <h3>Notifications</h3>
+                    <div class="setting-item">
+                        <label class="switch">
+                            <input type="checkbox" id="friction-notifications">
+                            <span class="slider"></span>
+                        </label>
+                        <div class="setting-info">
+                            <div class="setting-label">Friction Reminders</div>
+                            <div class="setting-description">Get gentle nudges when scrolling too long</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Browser Extension</h3>
+                    <div class="extension-info">
+                        <p>Install the browser extension to track real social media usage.</p>
+                        <button class="primary-btn">Install Extension</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modals -->
+    <div id="reflection-modal" class="modal">
+        <div class="modal-content modern">
+            <button class="modal-close">&times;</button>
+            <h2>Quick Check-in</h2>
+            <p>How are you feeling right now?</p>
+            <div class="mood-grid">
+                <button class="mood-card" data-mood="energized">
+                    <span class="mood-emoji">⚡</span>
+                    <span class="mood-label">Energized</span>
+                </button>
+                <button class="mood-card" data-mood="calm">
+                    <span class="mood-emoji">😌</span>
+                    <span class="mood-label">Calm</span>
+                </button>
+                <button class="mood-card" data-mood="focused">
+                    <span class="mood-emoji">🎯</span>
+                    <span class="mood-label">Focused</span>
+                </button>
+                <button class="mood-card" data-mood="tired">
+                    <span class="mood-emoji">😴</span>
+                    <span class="mood-label">Tired</span>
+                </button>
+                <button class="mood-card" data-mood="stressed">
+                    <span class="mood-emoji">😰</span>
+                    <span class="mood-label">Stressed</span>
+                </button>
+                <button class="mood-card" data-mood="happy">
+                    <span class="mood-emoji">😊</span>
+                    <span class="mood-label">Happy</span>
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- Main Feed Screen -->
-    <div id="feed" class="screen">
-        <!-- Header -->
-        <div class="header">
-            <div class="logo">Scroll Balance</div>
-            <div class="stats">
-                <div class="stat">
-                    <span class="stat-label">XP</span>
-                    <span id="xp-display" class="stat-value">0</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Time</span>
-                    <span id="time-display" class="stat-value">0m</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Level</span>
-                    <span id="level-display" class="stat-value">1</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Progress Bar -->
-        <div class="progress-container">
-            <div id="xp-bar" class="xp-bar"></div>
-        </div>
-
-        <!-- Content Feed -->
-        <div id="content-feed" class="content-feed">
-            <!-- Content cards will be inserted here -->
-        </div>
-
-        <!-- Friction Overlay -->
-        <div id="friction-overlay" class="friction-overlay">
-            <div class="friction-content">
-                <h2>⏸️ Take a Breath</h2>
-                <p id="friction-message"></p>
-                <div class="friction-actions">
-                    <button id="reflect-btn" class="btn">Reflect</button>
-                    <button id="continue-btn" class="btn secondary">Continue Anyway</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Reflection Modal -->
-        <div id="reflection-modal" class="modal">
-            <div class="modal-content">
-                <h3>Quick Check-in</h3>
-                <p>How are you feeling right now?</p>
-                <div class="mood-buttons">
-                    <button class="mood-btn" data-mood="great">😄 Great</button>
-                    <button class="mood-btn" data-mood="good">🙂 Good</button>
-                    <button class="mood-btn" data-mood="meh">😐 Meh</button>
-                    <button class="mood-btn" data-mood="tired">😴 Tired</button>
-                    <button class="mood-btn" data-mood="anxious">😰 Anxious</button>
-                </div>
-                <button id="close-reflection" class="btn primary-btn">Continue</button>
-            </div>
-        </div>
-    </div>
-
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
