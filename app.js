@@ -2882,11 +2882,11 @@ class ScrollBalancePro {
         const now = Date.now();
         const timeSinceLastAppearance = now - this.userData.lastOwlAppearance;
 
-        // Don't spam - at least 3 minutes between appearances
-        if (timeSinceLastAppearance < 180000) return false;
+        // Don't spam - at least 1 minute between appearances
+        if (timeSinceLastAppearance < 60000) return false;
 
         // If user dismisses owl too much, reduce frequency
-        if (this.userData.owlDismissals > 10 && timeSinceLastAppearance < 600000) return false;
+        if (this.userData.owlDismissals > 10 && timeSinceLastAppearance < 300000) return false;
 
         return true;
     }
@@ -3030,21 +3030,21 @@ class ScrollBalancePro {
     checkOwlTriggers() {
         // Low wellness
         if (this.userData.wellnessScore < 60) {
-            if (Math.random() < 0.3) { // 30% chance
+            if (Math.random() < 0.7) { // 70% chance
                 this.triggerOwlAppearance('low_wellness');
             }
         }
 
         // Quality streak
         if (this.userData.qualityStreakCurrent >= 2) {
-            if (Math.random() < 0.5) { // 50% chance
+            if (Math.random() < 0.8) { // 80% chance
                 this.triggerOwlAppearance('quality_streak');
             }
         }
 
         // Mindless scrolling
         if (this.userData.mindlessScrollDetected > 3) {
-            if (Math.random() < 0.4) { // 40% chance
+            if (Math.random() < 0.7) { // 70% chance
                 this.triggerOwlAppearance('mindless_scroll');
             }
         }
@@ -3052,13 +3052,13 @@ class ScrollBalancePro {
         // Long session (over 45 minutes)
         const sessionTime = (Date.now() - this.sessionStartTime) / 60000;
         if (sessionTime > 45) {
-            if (Math.random() < 0.3) { // 30% chance
+            if (Math.random() < 0.6) { // 60% chance
                 this.triggerOwlAppearance('long_session');
             }
         }
 
-        // Random check-in (10% chance every check)
-        if (Math.random() < 0.1) {
+        // Random check-in (30% chance every check)
+        if (Math.random() < 0.3) {
             this.triggerOwlAppearance('checkin');
         }
     }
