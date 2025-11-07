@@ -2906,16 +2906,33 @@ class ScrollBalancePro {
                 <div class="owl-speech-bubble">
                     <div class="owl-message">${message}</div>
                     <div class="owl-actions">
-                        <button class="owl-btn owl-dismiss" onclick="app.dismissOwl()">Thanks!</button>
-                        <button class="owl-btn owl-snooze" onclick="app.snoozeOwl()">Later</button>
+                        <button class="owl-btn owl-dismiss">Thanks!</button>
+                        <button class="owl-btn owl-snooze">Later</button>
                     </div>
                 </div>
-                <button class="owl-close" onclick="app.dismissOwl()">&times;</button>
+                <button class="owl-close">&times;</button>
             </div>
         `;
 
         document.body.appendChild(owl);
         console.log('🦉 Owl added to DOM');
+
+        // Add event listeners (CSP compliant - no inline onclick)
+        const dismissBtn = owl.querySelector('.owl-dismiss');
+        const snoozeBtn = owl.querySelector('.owl-snooze');
+        const closeBtn = owl.querySelector('.owl-close');
+
+        if (dismissBtn) {
+            dismissBtn.addEventListener('click', () => this.dismissOwl());
+        }
+
+        if (snoozeBtn) {
+            snoozeBtn.addEventListener('click', () => this.snoozeOwl());
+        }
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.dismissOwl());
+        }
 
         // Auto-dismiss after 15 seconds
         setTimeout(() => {
@@ -3067,6 +3084,14 @@ class ScrollBalancePro {
             });
         }
 
+        // Test owl button
+        const testOwlBtn = document.getElementById('test-owl-btn');
+        if (testOwlBtn) {
+            testOwlBtn.addEventListener('click', () => {
+                this.testOwl();
+            });
+        }
+
         // Temperament selection
         document.querySelectorAll('.temperament-option').forEach(option => {
             // Set initial selection
@@ -3135,11 +3160,11 @@ class ScrollBalancePro {
                 <div class="owl-speech-bubble">
                     <div class="owl-message">${testMessage}</div>
                     <div class="owl-actions">
-                        <button class="owl-btn owl-dismiss" onclick="document.querySelector('.owl-companion').remove()">Thanks!</button>
-                        <button class="owl-btn owl-snooze" onclick="document.querySelector('.owl-companion').remove()">Later</button>
+                        <button class="owl-btn owl-dismiss">Thanks!</button>
+                        <button class="owl-btn owl-snooze">Later</button>
                     </div>
                 </div>
-                <button class="owl-close" onclick="document.querySelector('.owl-companion').remove()">&times;</button>
+                <button class="owl-close">&times;</button>
             </div>
         `;
 
@@ -3148,6 +3173,35 @@ class ScrollBalancePro {
         console.log('🦉 Owl element added!');
         console.log('🦉 Owl in DOM:', document.querySelector('.owl-companion'));
         console.log('🦉 Computed styles:', window.getComputedStyle(owl));
+
+        // Add event listeners for buttons (CSP compliant)
+        const dismissBtn = owl.querySelector('.owl-dismiss');
+        const snoozeBtn = owl.querySelector('.owl-snooze');
+        const closeBtn = owl.querySelector('.owl-close');
+
+        if (dismissBtn) {
+            dismissBtn.addEventListener('click', () => {
+                console.log('🦉 Dismiss clicked');
+                owl.remove();
+            });
+        }
+
+        if (snoozeBtn) {
+            snoozeBtn.addEventListener('click', () => {
+                console.log('🦉 Snooze clicked');
+                owl.remove();
+            });
+        }
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                console.log('🦉 Close clicked');
+                owl.remove();
+            });
+        }
+
+        // Animate eyes to follow cursor
+        this.animateOwlEyes(owl);
     }
 
     showReflectionModal() {
