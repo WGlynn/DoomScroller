@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scroll Balance - Anti-Doomscroll Protocol</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Onboarding Screen -->
+    <div id="onboarding" class="screen active">
+        <div class="container">
+            <h1>🎯 Scroll Balance</h1>
+            <p class="subtitle">Find balance in your digital life</p>
+
+            <div class="goal-selection">
+                <h2>Choose Your Goals</h2>
+                <p>Select what matters to you:</p>
+
+                <div class="goals">
+                    <button class="goal-btn" data-goal="learn">📚 Learn Something</button>
+                    <button class="goal-btn" data-goal="chill">😌 Chill Intentionally</button>
+                    <button class="goal-btn" data-goal="reduce-anxiety">🧘 Reduce Anxiety</button>
+                    <button class="goal-btn" data-goal="productivity">⚡ Be Productive</button>
+                    <button class="goal-btn" data-goal="sleep">😴 Better Sleep</button>
+                </div>
+
+                <button id="start-btn" class="primary-btn" disabled>Start Scrolling Mindfully</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Feed Screen -->
+    <div id="feed" class="screen">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">Scroll Balance</div>
+            <div class="stats">
+                <div class="stat">
+                    <span class="stat-label">XP</span>
+                    <span id="xp-display" class="stat-value">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Time</span>
+                    <span id="time-display" class="stat-value">0m</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Level</span>
+                    <span id="level-display" class="stat-value">1</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress-container">
+            <div id="xp-bar" class="xp-bar"></div>
+        </div>
+
+        <!-- Content Feed -->
+        <div id="content-feed" class="content-feed">
+            <!-- Content cards will be inserted here -->
+        </div>
+
+        <!-- Friction Overlay -->
+        <div id="friction-overlay" class="friction-overlay">
+            <div class="friction-content">
+                <h2>⏸️ Take a Breath</h2>
+                <p id="friction-message"></p>
+                <div class="friction-actions">
+                    <button id="reflect-btn" class="btn">Reflect</button>
+                    <button id="continue-btn" class="btn secondary">Continue Anyway</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reflection Modal -->
+        <div id="reflection-modal" class="modal">
+            <div class="modal-content">
+                <h3>Quick Check-in</h3>
+                <p>How are you feeling right now?</p>
+                <div class="mood-buttons">
+                    <button class="mood-btn" data-mood="great">😄 Great</button>
+                    <button class="mood-btn" data-mood="good">🙂 Good</button>
+                    <button class="mood-btn" data-mood="meh">😐 Meh</button>
+                    <button class="mood-btn" data-mood="tired">😴 Tired</button>
+                    <button class="mood-btn" data-mood="anxious">😰 Anxious</button>
+                </div>
+                <button id="close-reflection" class="btn primary-btn">Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
