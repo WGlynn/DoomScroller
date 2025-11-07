@@ -1046,6 +1046,41 @@ input:checked + .slider:before {
     background: rgba(239, 68, 68, 0.2);
 }
 
+.action-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.action-btn:disabled:hover {
+    transform: none;
+    box-shadow: none;
+    background: var(--bg-tertiary);
+}
+
+.action-btn.valuable:disabled:hover {
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.action-btn.skip:disabled:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.vote-timer {
+    font-weight: 600;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+}
+
 /* ===== ANALYTICS ===== */
 .analytics-grid {
     display: grid;

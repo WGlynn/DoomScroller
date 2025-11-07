@@ -77,7 +77,10 @@ class ScrollBalancePro {
             owlEnabled: true,
             owlInteractions: [],
             lastOwlAppearance: 0,
-            owlDismissals: 0
+            owlDismissals: 0,
+
+            // Hardcore Mode
+            hardcoreMode: false
         };
 
         // Charts
@@ -1471,6 +1474,9 @@ class ScrollBalancePro {
                 const url = card.dataset.url;
                 if (url) window.open(url, '_blank');
             });
+
+            // Start timer countdown
+            this.startVoteTimer(card);
         });
     }
 
@@ -1515,8 +1521,11 @@ class ScrollBalancePro {
                     </div>
                 </div>
                 <div class="content-actions">
-                    <button class="action-btn valuable">👍 Valuable</button>
-                    <button class="action-btn skip">👎 Skip</button>
+                    <div class="vote-timer" style="text-align: center; margin-bottom: var(--spacing-sm); font-size: 0.9rem; color: var(--text-secondary);">
+                        ⏱️ Read for <span class="timer-countdown">15</span>s before rating
+                    </div>
+                    <button class="action-btn valuable" disabled>👍 Valuable</button>
+                    <button class="action-btn skip" disabled>👎 Skip</button>
                     <button class="action-btn view" style="background: rgba(99, 102, 241, 0.1); border-color: var(--primary); color: var(--primary);">🔗 View</button>
                 </div>
             </div>
@@ -1559,6 +1568,9 @@ class ScrollBalancePro {
             skipBtn?.addEventListener('click', () => {
                 this.rateContent(card, 'skip');
             });
+
+            // Start timer countdown
+            this.startVoteTimer(card);
         });
     }
 
@@ -1681,8 +1693,11 @@ class ScrollBalancePro {
                     </div>
                 </div>
                 <div class="content-actions">
-                    <button class="action-btn valuable">👍 Valuable</button>
-                    <button class="action-btn skip">👎 Skip</button>
+                    <div class="vote-timer" style="text-align: center; margin-bottom: var(--spacing-sm); font-size: 0.9rem; color: var(--text-secondary);">
+                        ⏱️ Read for <span class="timer-countdown">15</span>s before rating
+                    </div>
+                    <button class="action-btn valuable" disabled>👍 Valuable</button>
+                    <button class="action-btn skip" disabled>👎 Skip</button>
                 </div>
             </div>
         `;
@@ -1787,6 +1802,9 @@ class ScrollBalancePro {
                 addedCard.querySelector('.action-btn.skip')?.addEventListener('click', () => {
                     this.rateContent(addedCard, 'skip');
                 });
+
+                // Start timer for new card
+                this.startVoteTimer(addedCard);
             }
         }, 300);
 
@@ -1808,6 +1826,46 @@ class ScrollBalancePro {
 
         // Update dashboard if visible
         this.updateDashboardCoaching();
+    }
+
+    startVoteTimer(card) {
+        const timerDisplay = card.querySelector('.timer-countdown');
+        const valuableBtn = card.querySelector('.action-btn.valuable');
+        const skipBtn = card.querySelector('.action-btn.skip');
+        const timerContainer = card.querySelector('.vote-timer');
+
+        if (!timerDisplay || !valuableBtn || !skipBtn || !timerContainer) return;
+
+        // Use Intersection Observer to start timer only when card is visible
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting && !card.dataset.timerStarted) {
+                    // Mark that timer has started for this card
+                    card.dataset.timerStarted = 'true';
+
+                    let timeLeft = 15;
+
+                    const interval = setInterval(() => {
+                        timeLeft--;
+                        timerDisplay.textContent = timeLeft;
+
+                        if (timeLeft <= 0) {
+                            clearInterval(interval);
+                            valuableBtn.disabled = false;
+                            skipBtn.disabled = false;
+                            timerContainer.style.display = 'none';
+                        }
+                    }, 1000);
+
+                    // Stop observing once timer has started
+                    observer.unobserve(card);
+                }
+            });
+        }, {
+            threshold: 0.5 // Start timer when 50% of card is visible
+        });
+
+        observer.observe(card);
     }
 
     // ===== LIVE COACHING & BEHAVIORAL NUDGES =====
@@ -2978,7 +3036,7 @@ class ScrollBalancePro {
         }
 
         // Quality streak
-        if (this.userData.qualityStreakCurrent >= 7) {
+        if (this.userData.qualityStreakCurrent >= 2) {
             if (Math.random() < 0.5) { // 50% chance
                 this.triggerOwlAppearance('quality_streak');
             }
@@ -3037,6 +3095,24 @@ class ScrollBalancePro {
                 if (owlSettingsDiv) {
                     owlSettingsDiv.style.opacity = e.target.checked ? '1' : '0.5';
                     owlSettingsDiv.style.pointerEvents = e.target.checked ? 'auto' : 'none';
+                }
+            });
+        }
+
+        // Hardcore mode toggle
+        const hardcoreModeCheckbox = document.getElementById('hardcore-mode');
+        if (hardcoreModeCheckbox) {
+            hardcoreModeCheckbox.checked = this.userData.hardcoreMode;
+
+            hardcoreModeCheckbox.addEventListener('change', (e) => {
+                this.userData.hardcoreMode = e.target.checked;
+                this.saveData();
+
+                // Show confirmation toast
+                if (e.target.checked) {
+                    this.showToast('⚡ Hardcore mode enabled! You\'ll be restricted from social media for 24 hours if you don\'t meet your daily wellness goals.', 'warning');
+                } else {
+                    this.showToast('Hardcore mode disabled', 'info');
                 }
             });
         }
