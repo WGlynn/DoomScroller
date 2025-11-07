@@ -1881,60 +1881,7 @@ class ScrollBalancePro {
             this.userData.qualityStreakCurrent = 0;
         }
 
-        // Award XP based on mindful engagement
-        let xpGained = 0;
-        let baseXP = 0;
-        let multiplier = 1;
-        let bonusText = '';
-
-        if (rating === 'valuable') {
-            baseXP = isAligned ? 15 : 5;
-
-            // Engagement bonus: reward taking time to read
-            let engagementBonus = 0;
-            if (engagementRatio >= 1.0) {
-                // Spent expected time or more - REWARD mindful reading
-                engagementBonus = 0.5;
-                bonusText = 'Mindful reading bonus! ';
-            } else if (engagementRatio >= 0.7) {
-                // Decent engagement
-                engagementBonus = 0.2;
-            }
-            // No penalty for quick reading, just no bonus
-
-            multiplier += engagementBonus;
-
-            // Streak multipliers
-            if (this.userData.streak >= 30) multiplier += 2; // Changed from = to += to stack with engagement
-            else if (this.userData.streak >= 7) multiplier += 1;
-
-            // Quality streak bonus
-            if (this.userData.qualityStreakCurrent >= 5) {
-                multiplier += 0.5;
-            }
-
-            xpGained = Math.round(baseXP * multiplier);
-            this.userData.xp += xpGained;
-
-            if (multiplier > 1) {
-                bonusText += `${multiplier.toFixed(1)}x bonus!`;
-            }
-
-            this.addActivity('xp', `Earned ${xpGained} XP${bonusText ? ' (' + bonusText + ')' : ''}`, new Date());
-        } else if (rating === 'skip') {
-            if (!isAligned) {
-                // Small XP for skipping non-aligned content
-                xpGained = 3;
-                this.userData.xp += xpGained;
-            }
-        }
-
-        // Show XP gain animation with engagement feedback
-        if (xpGained > 0) {
-            this.showXPAnimation(card, xpGained, multiplier, engagementRatio);
-        }
-
-        // Show collective voting results AFTER user votes
+        // Calculate collective voting results FIRST
         const valuableVotes = parseInt(card.dataset.valuableVotes);
         const brainrotVotes = parseInt(card.dataset.brainrotVotes);
 
@@ -1944,17 +1891,89 @@ class ScrollBalancePro {
         const totalVotes = newValuable + newBrainrot;
         const valuablePercentage = Math.round((newValuable / totalVotes) * 100);
 
+        // Determine the majority vote
+        const majorityVote = valuablePercentage >= 50 ? 'valuable' : 'skip';
+        const votedWithMajority = rating === majorityVote;
+
+        // Award XP ONLY if user voted with the majority
+        let xpGained = 0;
+        let baseXP = 0;
+        let multiplier = 1;
+        let bonusText = '';
+        let consensusMessage = '';
+
+        if (votedWithMajority) {
+            if (rating === 'valuable') {
+                baseXP = isAligned ? 15 : 5;
+
+                // Engagement bonus: reward taking time to read
+                let engagementBonus = 0;
+                if (engagementRatio >= 1.0) {
+                    // Spent expected time or more - REWARD mindful reading
+                    engagementBonus = 0.5;
+                    bonusText = 'Mindful reading + ';
+                } else if (engagementRatio >= 0.7) {
+                    // Decent engagement
+                    engagementBonus = 0.2;
+                }
+
+                multiplier += engagementBonus;
+
+                // Streak multipliers
+                if (this.userData.streak >= 30) multiplier += 2;
+                else if (this.userData.streak >= 7) multiplier += 1;
+
+                // Quality streak bonus
+                if (this.userData.qualityStreakCurrent >= 5) {
+                    multiplier += 0.5;
+                }
+
+                xpGained = Math.round(baseXP * multiplier);
+                this.userData.xp += xpGained;
+
+                if (multiplier > 1) {
+                    bonusText += `${multiplier.toFixed(1)}x bonus!`;
+                }
+
+                consensusMessage = '✅ Consensus bonus!';
+                this.addActivity('xp', `Earned ${xpGained} XP (${bonusText}${consensusMessage})`, new Date());
+            } else if (rating === 'skip') {
+                if (!isAligned) {
+                    // Small XP for correctly identifying brain-rot
+                    xpGained = 5;
+                    this.userData.xp += xpGained;
+                    consensusMessage = '✅ Consensus bonus!';
+                    this.addActivity('xp', `Earned ${xpGained} XP (${consensusMessage})`, new Date());
+                }
+            }
+        } else {
+            // Voted against majority - no XP
+            consensusMessage = '⚠️ Against consensus';
+            this.addActivity('rating', `Voted ${rating} but community disagrees`, new Date());
+        }
+
+        // Show XP gain animation with engagement feedback
+        if (xpGained > 0) {
+            this.showXPAnimation(card, xpGained, multiplier, engagementRatio);
+        }
+
         // Update engagement indicator to show voting results
         const engagementIndicator = card.querySelector('.engagement-indicator');
         if (engagementIndicator) {
             const voteEmoji = rating === 'valuable' ? '👍' : '👎';
+            const consensusColor = votedWithMajority ? '#10b981' : '#f59e0b';
+            const consensusIcon = votedWithMajority ? '✅' : '⚠️';
+
             engagementIndicator.innerHTML = `
                 <div style="text-align: center; padding: var(--spacing-md);">
-                    <div style="font-size: 1.2rem; font-weight: 600; color: var(--text-primary); margin-bottom: var(--spacing-sm);">
+                    <div style="font-size: 1.2rem; font-weight: 600; color: var(--text-primary); margin-bottom: var(--spacing-xs);">
                         ${voteEmoji} ${valuablePercentage}% found this valuable
                     </div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: var(--spacing-sm);">
                         Based on ${totalVotes.toLocaleString()} community votes
+                    </div>
+                    <div style="font-size: 0.9rem; font-weight: 600; color: ${consensusColor};">
+                        ${consensusIcon} ${votedWithMajority ? 'Voted with majority +' + xpGained + ' XP' : 'Against majority - No XP'}
                     </div>
                 </div>
             `;
