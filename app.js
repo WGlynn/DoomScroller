@@ -1836,19 +1836,36 @@ class ScrollBalancePro {
 
         if (!timerDisplay || !valuableBtn || !skipBtn || !timerContainer) return;
 
-        let timeLeft = 15;
+        // Use Intersection Observer to start timer only when card is visible
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting && !card.dataset.timerStarted) {
+                    // Mark that timer has started for this card
+                    card.dataset.timerStarted = 'true';
 
-        const interval = setInterval(() => {
-            timeLeft--;
-            timerDisplay.textContent = timeLeft;
+                    let timeLeft = 15;
 
-            if (timeLeft <= 0) {
-                clearInterval(interval);
-                valuableBtn.disabled = false;
-                skipBtn.disabled = false;
-                timerContainer.style.display = 'none';
-            }
-        }, 1000);
+                    const interval = setInterval(() => {
+                        timeLeft--;
+                        timerDisplay.textContent = timeLeft;
+
+                        if (timeLeft <= 0) {
+                            clearInterval(interval);
+                            valuableBtn.disabled = false;
+                            skipBtn.disabled = false;
+                            timerContainer.style.display = 'none';
+                        }
+                    }, 1000);
+
+                    // Stop observing once timer has started
+                    observer.unobserve(card);
+                }
+            });
+        }, {
+            threshold: 0.5 // Start timer when 50% of card is visible
+        });
+
+        observer.observe(card);
     }
 
     // ===== LIVE COACHING & BEHAVIORAL NUDGES =====
