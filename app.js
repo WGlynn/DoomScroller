@@ -70,7 +70,14 @@ class ScrollBalancePro {
                 valuable: 0,
                 aligned: 0,
                 skip: 0
-            }))
+            })),
+
+            // NEW: Owl Chatbot Companion
+            owlTemperament: 'encouraging', // encouraging, tough-love, zen, quirky
+            owlEnabled: true,
+            owlInteractions: [],
+            lastOwlAppearance: 0,
+            owlDismissals: 0
         };
 
         // Charts
@@ -112,6 +119,7 @@ class ScrollBalancePro {
         this.setupNavigation();
         this.setupKeyboardShortcuts();
         this.setupModals();
+        this.setupOwlSettings();
         this.initCharts();
         this.updateAllStats();
         this.startTracking();
@@ -1000,6 +1008,7 @@ class ScrollBalancePro {
             // Check for milestones every minute
             if (this.userData.screenTime % 60 === 0) {
                 this.checkMilestones();
+                this.checkOwlTriggers();
             }
         }, 1000);
 
@@ -1793,6 +1802,9 @@ class ScrollBalancePro {
         // Live coaching and behavioral nudges
         this.provideLiveCoaching();
         this.detectMindlessScrolling();
+
+        // Check owl triggers for contextual guidance
+        this.checkOwlTriggers();
 
         // Update dashboard if visible
         this.updateDashboardCoaching();
@@ -2628,6 +2640,371 @@ class ScrollBalancePro {
         return `${month}/${day}`;
     }
 
+    // ===== OWL CHATBOT COMPANION =====
+    getOwlPersonality() {
+        const personalities = {
+            encouraging: {
+                name: 'Encouraging',
+                emoji: '🦉',
+                description: 'Supportive and positive vibes'
+            },
+            'tough-love': {
+                name: 'Tough Love',
+                emoji: '🦉',
+                description: 'Direct and keeps you accountable'
+            },
+            zen: {
+                name: 'Zen Master',
+                emoji: '🦉',
+                description: 'Calm and mindful guidance'
+            },
+            quirky: {
+                name: 'Quirky Companion',
+                emoji: '🦉',
+                description: 'Fun and slightly chaotic'
+            }
+        };
+        return personalities[this.userData.owlTemperament] || personalities.encouraging;
+    }
+
+    getOwlMessages(context) {
+        const temperament = this.userData.owlTemperament;
+        const messages = {
+            // When wellness score drops
+            low_wellness: {
+                encouraging: [
+                    "Hey friend! I noticed your wellness score dipped. You're still awesome - let's get back on track! 🌟",
+                    "Don't worry about the score! Every great journey has bumps. What matters is you're here trying. 💚",
+                    "I believe in you! Small steps lead to big changes. Ready to turn this around?"
+                ],
+                'tough-love': [
+                    "Alright, real talk: Your wellness score is dropping. Time to step up and make better choices. You got this!",
+                    "I'm not mad, just disappointed... JK! But seriously, let's fix this. No more mindless scrolling!",
+                    "Stop what you're doing. Look at that score. Now let's make it better. Action time!"
+                ],
+                zen: [
+                    "Notice the score without judgment. It's just information. Breathe, reset, continue. 🧘",
+                    "The score is low, but you are not the score. Return to your intentions. All is well.",
+                    "Observe this moment. Your awareness is already the first step toward balance."
+                ],
+                quirky: [
+                    "🚨 BEEP BOOP! Wellness systems at 42%! (Hitchhiker's Guide reference? No? Just me?) Let's boost those numbers!",
+                    "Your wellness score and I had a chat. It's feeling neglected. Show it some love!",
+                    "Plot twist: The real wellness was the content we skipped along the way! 🦉✨"
+                ]
+            },
+
+            // After quality streak
+            quality_streak: {
+                encouraging: [
+                    "WOW! Look at that quality streak! You're absolutely crushing it! Keep going! 🔥",
+                    "This is what I'm talking about! You're making fantastic choices! So proud! ✨",
+                    "Your streak is FIRE! You're building amazing habits right now! 🌟"
+                ],
+                'tough-love': [
+                    "Finally! THIS is what I like to see. Don't stop now - keep that momentum!",
+                    "Decent streak. Don't let it get to your head though. Consistency is what counts.",
+                    "Good. Now double it. I know you can."
+                ],
+                zen: [
+                    "Observe the flow state you've entered. This is mindful consumption. Beautiful. 🌸",
+                    "The streak is not the goal. The awareness behind each choice is. Well done.",
+                    "You are present. You are intentional. This is the way."
+                ],
+                quirky: [
+                    "STREAK ALERT! 🎉 Someone call the fire department because you're ON FIRE! (Metaphorically!)",
+                    "My owl senses are tingling! Quality content streak detected! *does owl victory dance*",
+                    "Achievement unlocked: Actual Good Decision Maker! Who even are you right now?! 🦉✨"
+                ]
+            },
+
+            // Mindless scrolling detected
+            mindless_scroll: {
+                encouraging: [
+                    "Hey, I see you're scrolling pretty fast! Maybe time for a quick breather? You deserve it! 💙",
+                    "Just checking in! You've been at this a while. How about a stretch or some water? 😊",
+                    "Friend reminder: You came here for a reason. What was it again?"
+                ],
+                'tough-love': [
+                    "STOP. Right now. You're doomscrolling and you know it. Close this or be intentional!",
+                    "Be honest: Are you finding what you need, or just burning time? Make a choice!",
+                    "You're better than this. Either focus up or take a real break!"
+                ],
+                zen: [
+                    "Notice the scrolling. Notice the seeking. What are you truly looking for? 🍃",
+                    "The scroll continues, yet nothing changes. Perhaps it's time to pause. Breathe.",
+                    "Observe the pattern. You have the power to break it. Right now. This moment."
+                ],
+                quirky: [
+                    "HALT! You've entered the Scroll Vortex™! Emergency extraction needed! 🚁",
+                    "My owl eyes are getting dizzy watching you scroll! Even I need a break! 🌀",
+                    "*waves wings frantically* HUMAN! HELLO! Anyone in there?! Time for a reality check!"
+                ]
+            },
+
+            // After completing daily challenge
+            challenge_complete: {
+                encouraging: [
+                    "YOU DID IT! Daily challenge complete! I'm so excited for you! 🎉🎊",
+                    "Challenge crushed! You're building such amazing habits! Keep shining! ✨",
+                    "That's my human! Challenge complete! You earned that XP!"
+                ],
+                'tough-love': [
+                    "Challenge done. Good. That's the bare minimum for success. Now what's next?",
+                    "Nice. Challenge complete. Don't celebrate too long - there's always another goal.",
+                    "Completed it. Good work. Now keep that energy going!"
+                ],
+                zen: [
+                    "The challenge is complete. The practice continues. Well done. 🙏",
+                    "Achievement noted. But remember: the journey itself is the destination.",
+                    "You set an intention. You followed through. This is mindful living."
+                ],
+                quirky: [
+                    "🎺 CHALLENGE COMPLETE! *confetti cannon* *owl party* THIS IS AMAZING!",
+                    "Did you just...? YOU DID! Challenge = DEMOLISHED! *chef's kiss* 🦉👌",
+                    "Breaking news: Local human completes challenge! Sources say 'they're awesome'!"
+                ]
+            },
+
+            // Random check-ins
+            checkin: {
+                encouraging: [
+                    "Hey you! Just wanted to say you're doing great! Keep being awesome! 💫",
+                    "Quick check-in: How are you feeling? Remember, I'm here to help! 🦉",
+                    "You're making progress even when it doesn't feel like it. Trust the process! ✨"
+                ],
+                'tough-love': [
+                    "Status check: Are you staying on track or slipping? Be honest.",
+                    "Quick question: Are you here with purpose or just passing time?",
+                    "Remember your goals? Yeah, me too. Let's stick to them."
+                ],
+                zen: [
+                    "This moment is an opportunity. How will you use it? 🌿",
+                    "Breathe in awareness. Breathe out distraction. You are here now.",
+                    "The screen glows. The mind wanders. Gently return to intention."
+                ],
+                quirky: [
+                    "🦉 Owl interruption! How's my favorite human doing? *ruffles feathers*",
+                    "Random owl fact: Did you know owls can rotate their heads 270°? Cool, right? Also, how ya doing?",
+                    "BEEP! Cuteness check! You're still adorable! Also, staying mindful? *winks with one eye*"
+                ]
+            },
+
+            // Long session warning
+            long_session: {
+                encouraging: [
+                    "You've been here a while! Maybe time for a little break? Your brain will thank you! 🌸",
+                    "Long session detected! You've got this, but breaks are healthy too! 💚",
+                    "Hey, superstar! Maybe stretch those legs? You've earned a breather!"
+                ],
+                'tough-love': [
+                    "You've been scrolling way too long. Take a break. Not a suggestion.",
+                    "Session time is through the roof. Either take a break or make it count!",
+                    "How long are you gonna sit here? Move. Now. Break time!"
+                ],
+                zen: [
+                    "Time flows like water. You've been here long. Consider flowing elsewhere. 🌊",
+                    "The session grows long. The body grows still. Movement is medicine. Rise.",
+                    "Notice the passage of time. Honor your body's needs. Take space."
+                ],
+                quirky: [
+                    "URGENT OWL BUSINESS! You've been sitting for *checks notes* way too long! Fly, human! 🦉",
+                    "My calculations show you've achieved maximum screen time! Achievement unlocked: Couch Potato! (jk love u, take a break tho)",
+                    "*taps on screen* Testing testing, is this thing on? Oh good! Your butt needs a break! 🪑❌"
+                ]
+            }
+        };
+
+        return messages[context]?.[temperament] || messages[context]?.encouraging || [];
+    }
+
+    shouldOwlAppear() {
+        if (!this.userData.owlEnabled) return false;
+
+        const now = Date.now();
+        const timeSinceLastAppearance = now - this.userData.lastOwlAppearance;
+
+        // Don't spam - at least 3 minutes between appearances
+        if (timeSinceLastAppearance < 180000) return false;
+
+        // If user dismisses owl too much, reduce frequency
+        if (this.userData.owlDismissals > 10 && timeSinceLastAppearance < 600000) return false;
+
+        return true;
+    }
+
+    triggerOwlAppearance(context, forceShow = false) {
+        if (!forceShow && !this.shouldOwlAppear()) return;
+
+        const messages = this.getOwlMessages(context);
+        if (messages.length === 0) return;
+
+        const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+        this.showOwl(randomMessage, context);
+
+        this.userData.lastOwlAppearance = Date.now();
+        this.userData.owlInteractions.push({
+            context,
+            message: randomMessage,
+            timestamp: Date.now()
+        });
+
+        // Keep last 50 interactions
+        if (this.userData.owlInteractions.length > 50) {
+            this.userData.owlInteractions = this.userData.owlInteractions.slice(-50);
+        }
+
+        this.saveData();
+    }
+
+    showOwl(message, context) {
+        // Remove existing owl
+        const existing = document.querySelector('.owl-companion');
+        if (existing) existing.remove();
+
+        const owl = document.createElement('div');
+        owl.className = 'owl-companion';
+        owl.innerHTML = `
+            <div class="owl-container">
+                <div class="owl-character">
+                    <div class="owl-body">
+                        <div class="owl-face">
+                            <div class="owl-eyes">
+                                <div class="owl-eye left">
+                                    <div class="owl-pupil"></div>
+                                </div>
+                                <div class="owl-eye right">
+                                    <div class="owl-pupil"></div>
+                                </div>
+                            </div>
+                            <div class="owl-beak"></div>
+                        </div>
+                        <div class="owl-wing left"></div>
+                        <div class="owl-wing right"></div>
+                    </div>
+                    <div class="owl-feet">
+                        <div class="owl-foot left"></div>
+                        <div class="owl-foot right"></div>
+                    </div>
+                </div>
+                <div class="owl-speech-bubble">
+                    <div class="owl-message">${message}</div>
+                    <div class="owl-actions">
+                        <button class="owl-btn owl-dismiss" onclick="app.dismissOwl()">Thanks!</button>
+                        <button class="owl-btn owl-snooze" onclick="app.snoozeOwl()">Later</button>
+                    </div>
+                </div>
+                <button class="owl-close" onclick="app.dismissOwl()">&times;</button>
+            </div>
+        `;
+
+        document.body.appendChild(owl);
+
+        // Animate entrance
+        setTimeout(() => owl.classList.add('owl-visible'), 10);
+
+        // Auto-dismiss after 15 seconds
+        setTimeout(() => {
+            if (document.contains(owl)) {
+                this.dismissOwl(true);
+            }
+        }, 15000);
+
+        // Animate eyes to follow cursor (fun detail)
+        this.animateOwlEyes(owl);
+    }
+
+    animateOwlEyes(owl) {
+        const leftPupil = owl.querySelector('.owl-pupil');
+        const rightPupil = owl.querySelectorAll('.owl-pupil')[1];
+
+        document.addEventListener('mousemove', function moveEyes(e) {
+            if (!document.contains(owl)) {
+                document.removeEventListener('mousemove', moveEyes);
+                return;
+            }
+
+            const leftEye = owl.querySelector('.owl-eye.left');
+            const rightEye = owl.querySelector('.owl-eye.right');
+
+            if (!leftEye || !rightEye) return;
+
+            const moveEye = (eye, pupil) => {
+                const rect = eye.getBoundingClientRect();
+                const eyeCenterX = rect.left + rect.width / 2;
+                const eyeCenterY = rect.top + rect.height / 2;
+
+                const angle = Math.atan2(e.clientY - eyeCenterY, e.clientX - eyeCenterX);
+                const distance = Math.min(rect.width * 0.2, 8);
+
+                const x = Math.cos(angle) * distance;
+                const y = Math.sin(angle) * distance;
+
+                pupil.style.transform = `translate(${x}px, ${y}px)`;
+            };
+
+            moveEye(leftEye, leftPupil);
+            moveEye(rightEye, rightPupil);
+        });
+    }
+
+    dismissOwl(auto = false) {
+        const owl = document.querySelector('.owl-companion');
+        if (owl) {
+            owl.classList.add('owl-hidden');
+            setTimeout(() => owl.remove(), 300);
+
+            if (!auto) {
+                this.userData.owlDismissals++;
+            }
+            this.saveData();
+        }
+    }
+
+    snoozeOwl() {
+        this.dismissOwl();
+        // Snooze for 30 minutes
+        this.userData.lastOwlAppearance = Date.now() + (30 * 60 * 1000);
+        this.saveData();
+    }
+
+    // Context-aware triggers
+    checkOwlTriggers() {
+        // Low wellness
+        if (this.userData.wellnessScore < 60) {
+            if (Math.random() < 0.3) { // 30% chance
+                this.triggerOwlAppearance('low_wellness');
+            }
+        }
+
+        // Quality streak
+        if (this.userData.qualityStreakCurrent >= 7) {
+            if (Math.random() < 0.5) { // 50% chance
+                this.triggerOwlAppearance('quality_streak');
+            }
+        }
+
+        // Mindless scrolling
+        if (this.userData.mindlessScrollDetected > 3) {
+            if (Math.random() < 0.4) { // 40% chance
+                this.triggerOwlAppearance('mindless_scroll');
+            }
+        }
+
+        // Long session (over 45 minutes)
+        const sessionTime = (Date.now() - this.sessionStartTime) / 60000;
+        if (sessionTime > 45) {
+            if (Math.random() < 0.3) { // 30% chance
+                this.triggerOwlAppearance('long_session');
+            }
+        }
+
+        // Random check-in (10% chance every check)
+        if (Math.random() < 0.1) {
+            this.triggerOwlAppearance('checkin');
+        }
+    }
+
     // ===== MODALS =====
     setupModals() {
         // Modal close
@@ -2641,6 +3018,51 @@ class ScrollBalancePro {
                 const mood = btn.dataset.mood;
                 this.recordMood(mood);
                 this.closeReflectionModal();
+            });
+        });
+    }
+
+    setupOwlSettings() {
+        // Owl enable/disable toggle
+        const owlEnabledCheckbox = document.getElementById('owl-enabled');
+        if (owlEnabledCheckbox) {
+            owlEnabledCheckbox.checked = this.userData.owlEnabled;
+
+            owlEnabledCheckbox.addEventListener('change', (e) => {
+                this.userData.owlEnabled = e.target.checked;
+                this.saveData();
+
+                // Toggle visibility of settings
+                const owlSettingsDiv = document.getElementById('owl-settings');
+                if (owlSettingsDiv) {
+                    owlSettingsDiv.style.opacity = e.target.checked ? '1' : '0.5';
+                    owlSettingsDiv.style.pointerEvents = e.target.checked ? 'auto' : 'none';
+                }
+            });
+        }
+
+        // Temperament selection
+        document.querySelectorAll('.temperament-option').forEach(option => {
+            // Set initial selection
+            if (option.dataset.temperament === this.userData.owlTemperament) {
+                option.classList.add('selected');
+            }
+
+            option.addEventListener('click', () => {
+                // Remove selection from all
+                document.querySelectorAll('.temperament-option').forEach(opt => {
+                    opt.classList.remove('selected');
+                });
+
+                // Add selection to clicked
+                option.classList.add('selected');
+
+                // Save temperament
+                this.userData.owlTemperament = option.dataset.temperament;
+                this.saveData();
+
+                // Show confirmation toast
+                this.showToast(`Owl temperament changed to ${option.querySelector('.temperament-name').textContent}! 🦉`, 'info');
             });
         });
     }
