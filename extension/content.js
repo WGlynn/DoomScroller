@@ -68,19 +68,60 @@
   }
 
   injectOverlay() {
-    // Create floating widget with unique ID
+    // Create enhanced floating widget with unique ID
     const widget = document.createElement('div');
     widget.id = `${this.namespace}-widget`;
     widget.className = 'scroll-balance-widget-v1';
+
+    const platform = this.detectPlatform();
+    const platformIcon = this.getPlatformIcon(platform);
+    const platformName = this.getPlatformName(platform);
+
     widget.innerHTML = `
       <div class="sb-widget-content">
         <div class="sb-widget-header">
-          <span class="sb-icon">⚖️</span>
-          <span class="sb-time">0m</span>
+          <span class="sb-platform-icon">${platformIcon}</span>
+          <span class="sb-platform-name">${platformName}</span>
+          <button class="sb-minimize-btn" title="Minimize">−</button>
         </div>
-        <div class="sb-widget-score">
-          <div class="sb-score-label">Wellness</div>
-          <div class="sb-score-value">85</div>
+
+        <div class="sb-widget-body">
+          <div class="sb-stat-row">
+            <div class="sb-stat">
+              <div class="sb-stat-label">Time Here</div>
+              <div class="sb-stat-value sb-time">0m</div>
+            </div>
+            <div class="sb-stat">
+              <div class="sb-stat-label">Viewed</div>
+              <div class="sb-stat-value sb-viewed">0</div>
+            </div>
+          </div>
+
+          <div class="sb-stat-row">
+            <div class="sb-stat">
+              <div class="sb-stat-label">Scroll Pace</div>
+              <div class="sb-stat-value sb-pace">Chill</div>
+            </div>
+            <div class="sb-stat">
+              <div class="sb-stat-label">Wellness</div>
+              <div class="sb-stat-value sb-wellness">85</div>
+            </div>
+          </div>
+
+          <div class="sb-scroll-indicator">
+            <div class="sb-scroll-bar"></div>
+          </div>
+
+          <div class="sb-insight">
+            <span class="sb-insight-icon">💡</span>
+            <span class="sb-insight-text">Loading insights...</span>
+          </div>
+
+          <div class="sb-quick-actions">
+            <button class="sb-action-btn" data-action="pause" title="Take a break">⏸️</button>
+            <button class="sb-action-btn" data-action="mood" title="Check mood">😊</button>
+            <button class="sb-action-btn" data-action="dashboard" title="Open dashboard">📊</button>
+          </div>
         </div>
       </div>
     `;
@@ -88,8 +129,161 @@
     // Make it draggable
     this.makeDraggable(widget);
 
+    // Add event listeners
+    this.setupWidgetListeners(widget);
+
     document.body.appendChild(widget);
     this.widgetId = widget.id;
+    this.isMinimized = false;
+  }
+
+  setupWidgetListeners(widget) {
+    // Minimize button
+    const minimizeBtn = widget.querySelector('.sb-minimize-btn');
+    minimizeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleMinimize(widget);
+    });
+
+    // Quick actions
+    widget.querySelectorAll('.sb-action-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        this.handleQuickAction(action);
+      });
+    });
+  }
+
+  toggleMinimize(widget) {
+    this.isMinimized = !this.isMinimized;
+    const body = widget.querySelector('.sb-widget-body');
+    const minimizeBtn = widget.querySelector('.sb-minimize-btn');
+
+    if (this.isMinimized) {
+      body.style.display = 'none';
+      minimizeBtn.textContent = '+';
+      minimizeBtn.title = 'Expand';
+    } else {
+      body.style.display = 'block';
+      minimizeBtn.textContent = '−';
+      minimizeBtn.title = 'Minimize';
+    }
+  }
+
+  handleQuickAction(action) {
+    switch(action) {
+      case 'pause':
+        this.showFrictionModal();
+        break;
+      case 'mood':
+        this.showQuickMoodCheck();
+        break;
+      case 'dashboard':
+        window.open(chrome.runtime.getURL('popup.html'), '_blank');
+        break;
+    }
+  }
+
+  showQuickMoodCheck() {
+    const modal = document.createElement('div');
+    modal.id = 'scroll-balance-quick-mood';
+    modal.innerHTML = `
+      <div class="sb-friction-overlay">
+        <div class="sb-friction-content sb-quick-mood">
+          <h2>😊 Quick Mood Check</h2>
+          <p>How's this ${this.getPlatformName(this.detectPlatform())} session treating you?</p>
+          <div class="sb-mood-buttons">
+            <button class="sb-mood-btn" data-mood="energized">⚡ Energized</button>
+            <button class="sb-mood-btn" data-mood="calm">😌 Calm</button>
+            <button class="sb-mood-btn" data-mood="focused">🎯 Focused</button>
+            <button class="sb-mood-btn" data-mood="tired">😴 Tired</button>
+            <button class="sb-mood-btn" data-mood="stressed">😰 Stressed</button>
+            <button class="sb-mood-btn" data-mood="happy">😊 Happy</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelectorAll('.sb-mood-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mood = btn.dataset.mood;
+        chrome.runtime.sendMessage({
+          action: 'recordMood',
+          mood: mood,
+          platform: this.detectPlatform()
+        });
+        modal.remove();
+        this.showToast('Mood recorded! 💚');
+      });
+    });
+
+    // Click outside to close
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal || e.target.classList.contains('sb-friction-overlay')) {
+        modal.remove();
+      }
+    });
+  }
+
+  showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'sb-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 300);
+    }, 2000);
+  }
+
+  getPlatformIcon(platform) {
+    const icons = {
+      'tiktok': '🎵',
+      'instagram': '📸',
+      'twitter': '🐦',
+      'youtube': '📺',
+      'reddit': '🤖',
+      'unknown': '🌐'
+    };
+    return icons[platform] || icons['unknown'];
+  }
+
+  getPlatformName(platform) {
+    const names = {
+      'tiktok': 'TikTok',
+      'instagram': 'Instagram',
+      'twitter': 'X/Twitter',
+      'youtube': 'YouTube',
+      'reddit': 'Reddit',
+      'unknown': 'Web'
+    };
+    return names[platform] || names['unknown'];
+  }
+
+  getPlatformInsight(platform) {
+    const insights = {
+      'tiktok': '🎵 TikTok: Quick swipes can add up. Are you finding what you came for?',
+      'instagram': '📸 Instagram: Beautiful feeds can be endless. Set an intention.',
+      'twitter': '🐦 Twitter: News moves fast. Don\'t let doom-scrolling take over.',
+      'youtube': '📺 YouTube: One video leads to another. Check your watch time.',
+      'reddit': '🤖 Reddit: So many threads to explore. Stay focused on your goals.',
+      'unknown': '🌐 Browse mindfully. Quality over quantity.'
+    };
+    return insights[platform] || insights['unknown'];
+  }
+
+  calculateScrollPace() {
+    const sessionTime = (Date.now() - this.sessionStart) / 1000; // seconds
+    const scrollsPerMinute = (this.scrollCount / sessionTime) * 60;
+
+    if (scrollsPerMinute < 10) return { label: 'Chill', color: '#10b981' };
+    if (scrollsPerMinute < 30) return { label: 'Moderate', color: '#f59e0b' };
+    if (scrollsPerMinute < 60) return { label: 'Fast', color: '#f97316' };
+    return { label: 'Rapid', color: '#ef4444' };
   }
 
   makeDraggable(element) {
@@ -294,15 +488,76 @@
   }
 
   async updateStats() {
-    const response = await chrome.runtime.sendMessage({ action: 'getSiteTime' });
-    const timeMinutes = Math.floor(response.time / 60);
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getSiteTime' });
+      const timeMinutes = Math.floor(response.time / 60);
 
-    const widget = document.getElementById(this.widgetId);
-    if (widget) {
+      const widget = document.getElementById(this.widgetId);
+      if (!widget) return;
+
+      // Update time
       const timeEl = widget.querySelector('.sb-time');
       if (timeEl) {
-        timeEl.textContent = `${timeMinutes}m`;
+        if (timeMinutes >= 60) {
+          const hours = Math.floor(timeMinutes / 60);
+          const mins = timeMinutes % 60;
+          timeEl.textContent = `${hours}h ${mins}m`;
+        } else {
+          timeEl.textContent = `${timeMinutes}m`;
+        }
       }
+
+      // Update content viewed
+      const viewedEl = widget.querySelector('.sb-viewed');
+      if (viewedEl) {
+        viewedEl.textContent = this.contentViewed;
+      }
+
+      // Update scroll pace
+      const paceEl = widget.querySelector('.sb-pace');
+      if (paceEl) {
+        const pace = this.calculateScrollPace();
+        paceEl.textContent = pace.label;
+        paceEl.style.color = pace.color;
+      }
+
+      // Update scroll indicator bar
+      const scrollBar = widget.querySelector('.sb-scroll-bar');
+      if (scrollBar) {
+        const sessionMinutes = (Date.now() - this.sessionStart) / 60000;
+        const scrollsPerMin = sessionMinutes > 0 ? this.scrollCount / sessionMinutes : 0;
+        const intensity = Math.min((scrollsPerMin / 60) * 100, 100); // Max at 60 scrolls/min
+        scrollBar.style.width = `${intensity}%`;
+
+        if (intensity < 30) {
+          scrollBar.style.background = '#10b981';
+        } else if (intensity < 60) {
+          scrollBar.style.background = '#f59e0b';
+        } else {
+          scrollBar.style.background = '#ef4444';
+        }
+      }
+
+      // Update platform insight
+      const insightEl = widget.querySelector('.sb-insight-text');
+      if (insightEl) {
+        const platform = this.detectPlatform();
+        const insight = this.getPlatformInsight(platform);
+        insightEl.textContent = insight;
+      }
+
+      // Update wellness score (get from storage if available)
+      const wellnessEl = widget.querySelector('.sb-wellness');
+      if (wellnessEl) {
+        chrome.storage.local.get(['scrollBalancePro'], (result) => {
+          if (result.scrollBalancePro) {
+            const data = JSON.parse(result.scrollBalancePro);
+            wellnessEl.textContent = data.wellnessScore || 85;
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error updating stats:', error);
     }
   }
 
