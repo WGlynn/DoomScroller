@@ -1433,13 +1433,30 @@ class ScrollBalancePro {
             this.moodChartInstance = null;
         }
 
-        // Wait for page to be visible and DOM to be ready
-        await new Promise(resolve => setTimeout(resolve, 150));
-
         // Check if Chart.js is loaded
         if (typeof Chart === 'undefined') {
             console.error('Chart.js not loaded');
             return;
+        }
+
+        // CRITICAL FIX: Wait for browser to complete layout pass
+        // Double requestAnimationFrame ensures canvas elements have computed dimensions
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        // Verify all canvas elements exist and have dimensions
+        const heatmapCanvas = document.getElementById('usage-heatmap');
+        const distCanvas = document.getElementById('time-distribution');
+        const moodCanvas = document.getElementById('mood-chart');
+
+        console.log('Canvas elements found:', {
+            heatmap: !!heatmapCanvas,
+            distribution: !!distCanvas,
+            mood: !!moodCanvas
+        });
+
+        if (heatmapCanvas) {
+            const rect = heatmapCanvas.getBoundingClientRect();
+            console.log('Heatmap canvas dimensions:', rect.width, 'x', rect.height);
         }
 
         // Load all charts
@@ -1457,6 +1474,13 @@ class ScrollBalancePro {
             return;
         }
 
+        // Verify canvas has dimensions
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            console.error('Usage heatmap canvas has zero dimensions:', rect);
+            return;
+        }
+
         if (typeof Chart === 'undefined') {
             console.error('Chart.js not loaded for heatmap');
             return;
@@ -1465,6 +1489,7 @@ class ScrollBalancePro {
         try {
             const data = this.generateHeatmapData();
             console.log('Heatmap data:', data);
+            console.log('Creating heatmap chart with dimensions:', rect.width, 'x', rect.height);
 
             this.usageHeatmapChart = new Chart(canvas, {
                 type: 'bar',
@@ -1515,12 +1540,20 @@ class ScrollBalancePro {
             return;
         }
 
+        // Verify canvas has dimensions
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            console.error('Time distribution canvas has zero dimensions:', rect);
+            return;
+        }
+
         if (typeof Chart === 'undefined') {
             console.error('Chart.js not loaded for time distribution');
             return;
         }
 
         try {
+            console.log('Creating time distribution chart with dimensions:', rect.width, 'x', rect.height);
             // Calculate actual distribution based on content ratings
             const ratings = this.userData.contentRatings;
             let social = 0, learning = 0, entertainment = 0, productive = 0;
@@ -1588,12 +1621,20 @@ class ScrollBalancePro {
             return;
         }
 
+        // Verify canvas has dimensions
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            console.error('Mood chart canvas has zero dimensions:', rect);
+            return;
+        }
+
         if (typeof Chart === 'undefined') {
             console.error('Chart.js not loaded for mood chart');
             return;
         }
 
         try {
+            console.log('Creating mood chart with dimensions:', rect.width, 'x', rect.height);
             // Get real mood data for last 7 days
             const moodData = [];
             for (let i = 6; i >= 0; i--) {
