@@ -102,6 +102,36 @@
                 </div>
             </div>
 
+            <!-- Level Progress -->
+            <div class="level-progress-section">
+                <div class="level-info">
+                    <h3>Level <span id="dashboard-level">1</span></h3>
+                    <span class="level-progress-text">0/100 XP to Level 2</span>
+                </div>
+                <div class="level-progress-container">
+                    <div class="level-progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Daily Challenge & Live Coaching -->
+            <div class="dashboard-row">
+                <div class="daily-challenge-card">
+                    <!-- Populated by JavaScript -->
+                </div>
+
+                <div class="live-coaching">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Achievements Showcase -->
+            <div class="achievements-section">
+                <h3>🏆 Recent Achievements</h3>
+                <div class="achievements-showcase">
+                    <p class="no-achievements">Complete actions to unlock achievements!</p>
+                </div>
+            </div>
+
             <!-- Charts Row -->
             <div class="charts-row">
                 <div class="chart-card large">
@@ -203,6 +233,16 @@
         <!-- Analytics Page -->
         <div class="page" id="analytics-page">
             <h2>Deep Analytics</h2>
+
+            <!-- Weekly Insights -->
+            <div class="weekly-insights-section">
+                <h3>📊 Weekly Insights</h3>
+                <div class="weekly-insights">
+                    <p class="no-insights">Keep rating content to unlock personalized insights!</p>
+                </div>
+            </div>
+
+            <!-- Core Analytics -->
             <div class="analytics-grid">
                 <div class="analytics-card">
                     <h3>Usage Patterns</h3>
@@ -215,6 +255,19 @@
                 <div class="analytics-card">
                     <h3>Mood Tracking</h3>
                     <canvas id="mood-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Advanced Analytics -->
+            <h3 style="margin-top: var(--spacing-xl);">📈 Advanced Insights</h3>
+            <div class="analytics-grid">
+                <div class="analytics-card">
+                    <h3>Quality Trends (14 Days)</h3>
+                    <canvas id="quality-trends-chart"></canvas>
+                </div>
+                <div class="analytics-card wide">
+                    <h3>Time-of-Day Patterns (24 Hour)</h3>
+                    <canvas id="time-heatmap-chart"></canvas>
                 </div>
             </div>
         </div>
@@ -423,7 +476,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="charts.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

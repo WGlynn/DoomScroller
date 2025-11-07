@@ -43,7 +43,34 @@ class ScrollBalancePro {
             moodHistory: [],
             activityHistory: [],
             contentRatings: [],
-            dailyStats: this.loadDailyStats()
+            dailyStats: this.loadDailyStats(),
+
+            // NEW: Achievement & Progression
+            achievements: [],
+            unlockedBadges: [],
+            dailyChallenge: null,
+            challengeProgress: 0,
+            totalContentRated: 0,
+            totalValuableContent: 0,
+
+            // NEW: Behavioral Tracking
+            sessionRatings: [], // Current session ratings
+            lastNudgeTime: 0,
+            mindlessScrollDetected: 0,
+            qualityStreakCurrent: 0, // Consecutive valuable ratings
+            qualityStreakBest: 0,
+
+            // NEW: Content Memory & Learning
+            contentSignatures: new Map(), // Remember rated content
+            categoryPreferences: {}, // Learn what user likes
+
+            // NEW: Time Pattern Data
+            hourlyEngagement: Array(24).fill(null).map(() => ({
+                ratings: 0,
+                valuable: 0,
+                aligned: 0,
+                skip: 0
+            }))
         };
 
         // Charts
@@ -72,6 +99,11 @@ class ScrollBalancePro {
         // Historical data for charts
         this.historicalData = this.loadHistoricalData();
 
+        // Session tracking for live coaching
+        this.sessionStartTime = Date.now();
+        this.sessionAlignedCount = 0;
+        this.lastCoachingMessage = null;
+
         this.init();
     }
 
@@ -85,11 +117,268 @@ class ScrollBalancePro {
         this.startTracking();
         this.loadGoalsProgress();
         this.loadActivityTimeline();
+        this.generateDailyChallenge();
+        this.checkAchievements();
 
         // Preload analytics charts if we're on that page
         if (document.getElementById('analytics-page')?.classList.contains('active')) {
             setTimeout(() => this.loadAnalytics(), 100);
         }
+    }
+
+    // ===== ACHIEVEMENTS & PROGRESSION SYSTEM =====
+    getAchievementDefinitions() {
+        return [
+            {
+                id: 'first_rating',
+                name: 'First Steps',
+                description: 'Rate your first piece of content',
+                icon: '🌱',
+                condition: () => this.userData.totalContentRated >= 1,
+                xpReward: 50
+            },
+            {
+                id: 'quality_curator_10',
+                name: 'Quality Curator',
+                description: 'Rate 10 pieces of valuable content',
+                icon: '⭐',
+                condition: () => this.userData.totalValuableContent >= 10,
+                xpReward: 100
+            },
+            {
+                id: 'quality_curator_50',
+                name: 'Master Curator',
+                description: 'Rate 50 pieces of valuable content',
+                icon: '🌟',
+                condition: () => this.userData.totalValuableContent >= 50,
+                xpReward: 250
+            },
+            {
+                id: 'streak_7',
+                name: 'Week Warrior',
+                description: 'Maintain a 7-day streak',
+                icon: '🔥',
+                condition: () => this.userData.streak >= 7,
+                xpReward: 200
+            },
+            {
+                id: 'streak_30',
+                name: 'Month Master',
+                description: 'Maintain a 30-day streak',
+                icon: '💎',
+                condition: () => this.userData.streak >= 30,
+                xpReward: 500
+            },
+            {
+                id: 'quality_streak_5',
+                name: 'On a Roll',
+                description: 'Rate 5 valuable items in a row',
+                icon: '🎯',
+                condition: () => this.userData.qualityStreakBest >= 5,
+                xpReward: 150
+            },
+            {
+                id: 'quality_streak_10',
+                name: 'Unstoppable',
+                description: 'Rate 10 valuable items in a row',
+                icon: '🚀',
+                condition: () => this.userData.qualityStreakBest >= 10,
+                xpReward: 300
+            },
+            {
+                id: 'level_5',
+                name: 'Intermediate',
+                description: 'Reach level 5',
+                icon: '📈',
+                condition: () => this.userData.level >= 5,
+                xpReward: 100
+            },
+            {
+                id: 'level_10',
+                name: 'Advanced User',
+                description: 'Reach level 10',
+                icon: '🏆',
+                condition: () => this.userData.level >= 10,
+                xpReward: 300
+            },
+            {
+                id: 'wellness_80',
+                name: 'Mindful Master',
+                description: 'Achieve 80+ wellness score',
+                icon: '🧘',
+                condition: () => this.userData.wellnessScore >= 80,
+                xpReward: 150
+            },
+            {
+                id: 'wellness_90',
+                name: 'Zen Master',
+                description: 'Achieve 90+ wellness score',
+                icon: '✨',
+                condition: () => this.userData.wellnessScore >= 90,
+                xpReward: 350
+            },
+            {
+                id: 'daily_challenge_1',
+                name: 'Challenge Accepted',
+                description: 'Complete your first daily challenge',
+                icon: '🎮',
+                condition: () => this.userData.achievements.filter(a => a.includes('daily_complete')).length >= 1,
+                xpReward: 100
+            },
+            {
+                id: 'alignment_master',
+                name: 'Alignment Master',
+                description: 'Maintain 90% goal alignment',
+                icon: '🎪',
+                condition: () => {
+                    const recent = this.userData.contentRatings.slice(-20);
+                    if (recent.length < 10) return false;
+                    const aligned = recent.filter(r => r.aligned).length;
+                    return (aligned / recent.length) >= 0.9;
+                },
+                xpReward: 400
+            }
+        ];
+    }
+
+    checkAchievements() {
+        const definitions = this.getAchievementDefinitions();
+        let newAchievements = [];
+
+        definitions.forEach(achievement => {
+            // Skip if already unlocked
+            if (this.userData.achievements.includes(achievement.id)) return;
+
+            // Check condition
+            if (achievement.condition()) {
+                this.userData.achievements.push(achievement.id);
+                this.userData.xp += achievement.xpReward;
+                newAchievements.push(achievement);
+
+                // Track as activity
+                this.addActivity('achievement', `🏆 Unlocked: ${achievement.name}`, new Date());
+            }
+        });
+
+        // Show celebration if new achievements
+        if (newAchievements.length > 0) {
+            this.showAchievementNotification(newAchievements);
+            this.checkLevelUp();
+            this.saveData();
+        }
+    }
+
+    showAchievementNotification(achievements) {
+        achievements.forEach((achievement, index) => {
+            setTimeout(() => {
+                this.showToast(`${achievement.icon} ${achievement.name}`, achievement.description, 'achievement');
+            }, index * 500);
+        });
+    }
+
+    generateDailyChallenge() {
+        const today = new Date().toDateString();
+
+        // Check if we already have today's challenge
+        if (this.userData.dailyChallenge && this.userData.dailyChallenge.date === today) {
+            return;
+        }
+
+        // Generate new challenge
+        const challenges = [
+            {
+                id: 'rate_10',
+                name: 'Rate 10 items',
+                description: 'Rate at least 10 pieces of content today',
+                target: 10,
+                progress: 0,
+                type: 'ratings',
+                xpReward: 100
+            },
+            {
+                id: 'valuable_7',
+                name: 'Find 7 gems',
+                description: 'Find and rate 7 valuable pieces of content',
+                target: 7,
+                progress: 0,
+                type: 'valuable',
+                xpReward: 150
+            },
+            {
+                id: 'alignment_80',
+                name: '80% Alignment',
+                description: 'Maintain at least 80% goal alignment today',
+                target: 80,
+                progress: 0,
+                type: 'alignment',
+                xpReward: 120
+            },
+            {
+                id: 'mindful_session',
+                name: 'Mindful Session',
+                description: 'Complete a session with 100% valuable ratings',
+                target: 5,
+                progress: 0,
+                type: 'perfect_session',
+                xpReward: 200
+            }
+        ];
+
+        // Pick random challenge
+        const challenge = challenges[Math.floor(Math.random() * challenges.length)];
+        challenge.date = today;
+
+        this.userData.dailyChallenge = challenge;
+        this.userData.challengeProgress = 0;
+        this.saveData();
+    }
+
+    updateDailyChallengeProgress() {
+        if (!this.userData.dailyChallenge) return;
+
+        const challenge = this.userData.dailyChallenge;
+        const today = new Date().toDateString();
+
+        // Reset if it's a new day
+        if (challenge.date !== today) {
+            this.generateDailyChallenge();
+            return;
+        }
+
+        // Calculate progress based on challenge type
+        let progress = 0;
+        const todayRatings = this.userData.contentRatings.filter(r => {
+            return new Date(r.timestamp).toDateString() === today;
+        });
+
+        switch(challenge.type) {
+            case 'ratings':
+                progress = todayRatings.length;
+                break;
+            case 'valuable':
+                progress = todayRatings.filter(r => r.rating === 'valuable').length;
+                break;
+            case 'alignment':
+                const aligned = todayRatings.filter(r => r.aligned).length;
+                progress = todayRatings.length > 0 ? Math.round((aligned / todayRatings.length) * 100) : 0;
+                break;
+            case 'perfect_session':
+                const valuableCount = todayRatings.filter(r => r.rating === 'valuable').length;
+                progress = valuableCount;
+                break;
+        }
+
+        challenge.progress = progress;
+
+        // Check if completed
+        if (progress >= challenge.target && !this.userData.achievements.includes(`daily_complete_${challenge.date}`)) {
+            this.userData.achievements.push(`daily_complete_${challenge.date}`);
+            this.userData.xp += challenge.xpReward;
+            this.showToast('🎉 Daily Challenge Complete!', `+${challenge.xpReward} XP`, 'success');
+            this.checkAchievements();
+        }
+
+        this.saveData();
     }
 
     setupKeyboardShortcuts() {
@@ -402,56 +691,158 @@ class ScrollBalancePro {
 
     // ===== WELLNESS CALCULATION =====
     calculateWellnessScore() {
-        // Factors:
-        // 1. Goal alignment (40%)
-        // 2. Time management (30%)
-        // 3. Mood trend (20%)
-        // 4. Engagement quality (10%)
+        // Advanced wellness calculation with 7 factors
+        // 1. Goal alignment (25%) - How well content matches goals
+        // 2. Time management (20%) - Balance of screen time
+        // 3. Mood trajectory (15%) - Improving vs declining mood
+        // 4. Engagement quality (15%) - Valuable vs mindless consumption
+        // 5. Consistency bonus (10%) - Maintaining healthy patterns
+        // 6. Content diversity (10%) - Variety of content types
+        // 7. Recency weighting (5%) - Recent behavior matters more
 
-        let score = 50; // Start at baseline
+        let score = 0;
 
-        // Goal alignment (40%)
+        // 1. GOAL ALIGNMENT (25 points max)
         const totalRatings = Math.max(this.userData.contentRatings.length, 1);
-        const goalAlignedRatings = this.userData.contentRatings.filter(r => r.aligned).length;
-        const goalScore = (goalAlignedRatings / totalRatings) * 40;
+        const recentRatings = this.userData.contentRatings.slice(-20); // Last 20 ratings
+        const alignedRatings = recentRatings.filter(r => r.aligned).length;
+        const alignmentRatio = alignedRatings / Math.max(recentRatings.length, 1);
 
-        // Time management (30%) - use DAILY stats, not lifetime
+        // Bonus for high alignment
+        let goalScore = alignmentRatio * 25;
+        if (alignmentRatio > 0.8) goalScore += 5; // Bonus for excellent alignment
+        score += Math.min(goalScore, 30);
+
+        // 2. TIME MANAGEMENT (20 points max)
         const dailyHours = (this.userData.dailyStats.screenTime || 0) / 3600;
-        const targetHours = 3; // Reasonable daily target
-        let timeScore;
-        if (dailyHours <= targetHours) {
-            timeScore = 30; // Full points if under target
-        } else {
-            // Gradually decrease as time increases beyond target
-            timeScore = Math.max(0, 30 * (1 - (dailyHours - targetHours) / targetHours));
-        }
+        let timeScore = 20;
 
-        // Mood trend (20%)
-        let moodScore = 10; // Default baseline
-        const recentMoods = this.userData.moodHistory.slice(-5);
-        if (recentMoods.length > 0) {
-            const positiveMoods = recentMoods.filter(m =>
+        if (dailyHours === 0) {
+            timeScore = 15; // Some usage is good
+        } else if (dailyHours < 1) {
+            timeScore = 18; // Light usage
+        } else if (dailyHours <= 2) {
+            timeScore = 20; // Ideal range
+        } else if (dailyHours <= 3) {
+            timeScore = 17; // Moderate
+        } else if (dailyHours <= 4) {
+            timeScore = 12; // Getting high
+        } else if (dailyHours <= 6) {
+            timeScore = 7; // High usage
+        } else {
+            timeScore = Math.max(0, 7 - (dailyHours - 6) * 2); // Excessive
+        }
+        score += timeScore;
+
+        // 3. MOOD TRAJECTORY (15 points max)
+        const recentMoods = this.userData.moodHistory.slice(-10);
+        let moodScore = 10; // Default
+
+        if (recentMoods.length >= 3) {
+            // Calculate mood trend
+            const moodScores = recentMoods.map(m => m.score || this.getMoodScore(m.mood));
+            const recentAvg = moodScores.slice(-3).reduce((a, b) => a + b, 0) / 3;
+            const olderAvg = moodScores.slice(0, -3).reduce((a, b) => a + b, 0) / Math.max(moodScores.length - 3, 1);
+
+            // Reward improving mood
+            if (recentAvg > olderAvg) {
+                moodScore = 15; // Improving
+            } else if (recentAvg >= 75) {
+                moodScore = 13; // Consistently good
+            } else if (recentAvg >= 60) {
+                moodScore = 10; // Moderate
+            } else {
+                moodScore = 7; // Concerning
+            }
+
+            // Bonus for recent positive moods
+            const recentPositive = recentMoods.slice(-3).filter(m =>
                 ['energized', 'calm', 'focused', 'happy'].includes(m.mood)
             ).length;
-            moodScore = (positiveMoods / recentMoods.length) * 20;
+            if (recentPositive === 3) moodScore += 3;
+        }
+        score += Math.min(moodScore, 18);
+
+        // 4. ENGAGEMENT QUALITY (15 points max)
+        let engagementScore = 7; // Default
+
+        if (recentRatings.length > 0) {
+            const valuableCount = recentRatings.filter(r => r.rating === 'valuable').length;
+            const valuableRatio = valuableCount / recentRatings.length;
+
+            engagementScore = valuableRatio * 15;
+
+            // Penalty for excessive skipping (mindless scrolling)
+            const skipCount = recentRatings.filter(r => r.rating === 'skip').length;
+            const skipRatio = skipCount / recentRatings.length;
+            if (skipRatio > 0.7) {
+                engagementScore *= 0.7; // 30% penalty for mindless scrolling
+            }
+        }
+        score += engagementScore;
+
+        // 5. CONSISTENCY BONUS (10 points max)
+        let consistencyScore = 0;
+
+        // Check streak
+        if (this.userData.streak >= 7) consistencyScore += 5;
+        else if (this.userData.streak >= 3) consistencyScore += 3;
+        else if (this.userData.streak >= 1) consistencyScore += 1;
+
+        // Check historical consistency
+        const historicalDates = Object.keys(this.historicalData);
+        if (historicalDates.length >= 5) {
+            const recentScores = historicalDates.slice(-5).map(date =>
+                this.historicalData[date].wellnessScore
+            );
+            const avgScore = recentScores.reduce((a, b) => a + b, 0) / recentScores.length;
+            if (avgScore >= 75) consistencyScore += 5;
         }
 
-        // Engagement quality (10%)
-        let engagementScore = 5; // Default baseline
-        if (totalRatings > 0) {
-            const valuableContent = this.userData.contentRatings.filter(r => r.rating === 'valuable').length;
-            engagementScore = (valuableContent / totalRatings) * 10;
+        score += consistencyScore;
+
+        // 6. CONTENT DIVERSITY (10 points max)
+        let diversityScore = 5; // Default
+
+        if (recentRatings.length >= 10) {
+            const goalTypes = new Set(recentRatings.map(r => r.goal));
+            const diversityRatio = goalTypes.size / 5; // Max 5 goal types
+            diversityScore = diversityRatio * 10;
+
+            // Slight bonus for exploring different content
+            if (goalTypes.size >= 3) diversityScore += 2;
         }
+        score += Math.min(diversityScore, 12);
 
-        score = Math.round(goalScore + timeScore + moodScore + engagementScore);
+        // 7. RECENCY WEIGHTING (5 points max)
+        // Reward recent positive actions
+        const lastHourRatings = this.userData.contentRatings.filter(r => {
+            return Date.now() - r.timestamp < 3600000; // Last hour
+        });
 
-        // Ensure score is within bounds
-        this.userData.wellnessScore = Math.max(0, Math.min(100, score));
+        let recencyScore = 2; // Default
+        if (lastHourRatings.length > 0) {
+            const recentAligned = lastHourRatings.filter(r => r.aligned && r.rating === 'valuable').length;
+            const recentRatio = recentAligned / lastHourRatings.length;
+            recencyScore = recentRatio * 5;
+        }
+        score += recencyScore;
 
-        // Only push score if it changed significantly (avoid array bloat)
+        // FINAL ADJUSTMENTS
+        // Normalize to 0-100 range
+        score = Math.round(score);
+        score = Math.max(20, Math.min(100, score)); // Floor at 20, ceiling at 100
+
+        // Smooth transitions (moving average with previous score)
+        const previousScore = this.userData.wellnessScore || 85;
+        score = Math.round(previousScore * 0.3 + score * 0.7); // 70% new, 30% old
+
+        this.userData.wellnessScore = score;
+
+        // Only push score if it changed
         const lastScore = this.userData.dailyStats.wellnessScores.slice(-1)[0];
-        if (!lastScore || Math.abs(lastScore - this.userData.wellnessScore) > 2) {
-            this.userData.dailyStats.wellnessScores.push(this.userData.wellnessScore);
+        if (!lastScore || Math.abs(lastScore - score) > 1) {
+            this.userData.dailyStats.wellnessScores.push(score);
 
             // Keep only last 100 scores
             if (this.userData.dailyStats.wellnessScores.length > 100) {
@@ -459,7 +850,7 @@ class ScrollBalancePro {
             }
         }
 
-        return this.userData.wellnessScore;
+        return score;
     }
 
     // ===== STATS UPDATE =====
@@ -473,8 +864,9 @@ class ScrollBalancePro {
         const minutes = Math.floor((this.userData.screenTime % 3600) / 60);
         document.getElementById('screen-time').textContent = `${hours}h ${minutes}m`;
 
-        // Update XP
+        // Update XP with level progression
         document.getElementById('total-xp').textContent = this.userData.xp.toLocaleString();
+        this.updateLevelProgress();
 
         // Update streak
         document.getElementById('streak').textContent = `${this.userData.streak} days`;
@@ -482,10 +874,98 @@ class ScrollBalancePro {
         // Update sidebar level
         document.getElementById('sidebar-level').textContent = this.userData.level;
 
+        // Update achievements
+        this.loadAchievementsBadges();
+
+        // Update daily challenge
+        this.loadDailyChallengeCard();
+
         // Save data
         this.saveData();
         this.saveDailyStats();
         this.saveHistoricalData();
+    }
+
+    updateLevelProgress() {
+        const xpForNextLevel = this.getXPForLevel(this.userData.level + 1);
+        const xpForCurrentLevel = this.getXPForLevel(this.userData.level);
+        const xpIntoLevel = this.userData.xp - xpForCurrentLevel;
+        const xpNeeded = xpForNextLevel - xpForCurrentLevel;
+        const progress = Math.min((xpIntoLevel / xpNeeded) * 100, 100);
+
+        const progressBar = document.querySelector('.level-progress-bar');
+        if (progressBar) {
+            progressBar.style.width = `${progress}%`;
+        }
+
+        const progressText = document.querySelector('.level-progress-text');
+        if (progressText) {
+            progressText.textContent = `${xpIntoLevel}/${xpNeeded} XP to Level ${this.userData.level + 1}`;
+        }
+    }
+
+    getXPForLevel(level) {
+        // Exponential XP curve: Level 2 = 100, Level 3 = 250, Level 4 = 500, etc.
+        return Math.floor(100 * Math.pow(level - 1, 1.5));
+    }
+
+    loadAchievementsBadges() {
+        const container = document.querySelector('.achievements-showcase');
+        if (!container) return;
+
+        const definitions = this.getAchievementDefinitions();
+        const recent = this.userData.achievements.slice(-4).reverse();
+
+        if (recent.length === 0) {
+            container.innerHTML = '<p class="no-achievements">Complete actions to unlock achievements!</p>';
+            return;
+        }
+
+        container.innerHTML = recent.map(achievementId => {
+            const achievement = definitions.find(a => a.id === achievementId);
+            if (!achievement) return '';
+
+            return `
+                <div class="achievement-badge">
+                    <div class="badge-icon">${achievement.icon}</div>
+                    <div class="badge-info">
+                        <div class="badge-name">${achievement.name}</div>
+                        <div class="badge-desc">${achievement.description}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    loadDailyChallengeCard() {
+        const container = document.querySelector('.daily-challenge-card');
+        if (!container) return;
+
+        if (!this.userData.dailyChallenge) {
+            this.generateDailyChallenge();
+        }
+
+        const challenge = this.userData.dailyChallenge;
+        const progress = challenge.progress || 0;
+        const progressPercent = Math.min((progress / challenge.target) * 100, 100);
+        const isComplete = progress >= challenge.target;
+
+        container.innerHTML = `
+            <div class="challenge-header">
+                <h4>🎯 Daily Challenge</h4>
+                <span class="challenge-reward">+${challenge.xpReward} XP</span>
+            </div>
+            <div class="challenge-name">${challenge.name}</div>
+            <div class="challenge-description">${challenge.description}</div>
+            <div class="challenge-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill ${isComplete ? 'complete' : ''}" style="width: ${progressPercent}%"></div>
+                </div>
+                <div class="progress-text">
+                    ${progress}/${challenge.target} ${isComplete ? '✅ Complete!' : ''}
+                </div>
+            </div>
+        `;
     }
 
     // ===== TRACKING =====
@@ -911,6 +1391,19 @@ class ScrollBalancePro {
                         const goal = this.categorizeRedditPost(post);
                         const isAligned = this.userData.goals.includes(goal);
 
+                        // Get best quality image
+                        let imageUrl = null;
+                        if (post.preview && post.preview.images && post.preview.images[0]) {
+                            // Use preview image (higher quality)
+                            imageUrl = post.preview.images[0].source.url.replace(/&amp;/g, '&');
+                        } else if (post.thumbnail && post.thumbnail.startsWith('http')) {
+                            // Fallback to thumbnail
+                            imageUrl = post.thumbnail;
+                        } else if (post.url && /\.(jpg|jpeg|png|gif|webp)$/i.test(post.url)) {
+                            // Direct image link
+                            imageUrl = post.url;
+                        }
+
                         posts.push({
                             id: post.id,
                             title: post.title,
@@ -918,7 +1411,7 @@ class ScrollBalancePro {
                             author: post.author,
                             subreddit: post.subreddit,
                             url: `https://reddit.com${post.permalink}`,
-                            thumbnail: post.thumbnail && post.thumbnail.startsWith('http') ? post.thumbnail : null,
+                            thumbnail: imageUrl,
                             score: post.score,
                             goal: goal,
                             aligned: isAligned,
@@ -1190,27 +1683,77 @@ class ScrollBalancePro {
         const isAligned = card.dataset.aligned === 'true';
         const goal = card.dataset.goal;
         const contentId = card.dataset.id;
+        const currentHour = new Date().getHours();
 
-        // Record rating
-        this.userData.contentRatings.push({
+        // Record rating with enhanced metadata
+        const ratingData = {
             id: contentId,
             goal: goal,
             aligned: isAligned,
             rating: rating,
-            timestamp: Date.now()
-        });
+            timestamp: Date.now(),
+            hour: currentHour,
+            sessionTime: Date.now() - this.sessionStartTime
+        };
 
-        // Award XP
-        let xpGained = 0;
+        this.userData.contentRatings.push(ratingData);
+        this.userData.sessionRatings.push(ratingData);
+        this.userData.totalContentRated++;
+
         if (rating === 'valuable') {
-            xpGained = isAligned ? 15 : 5;
+            this.userData.totalValuableContent++;
+        }
+
+        // Update hourly engagement patterns
+        const hourData = this.userData.hourlyEngagement[currentHour];
+        hourData.ratings++;
+        if (rating === 'valuable') hourData.valuable++;
+        if (isAligned) hourData.aligned++;
+        if (rating === 'skip') hourData.skip++;
+
+        // Track quality streaks
+        if (rating === 'valuable' && isAligned) {
+            this.userData.qualityStreakCurrent++;
+            if (this.userData.qualityStreakCurrent > this.userData.qualityStreakBest) {
+                this.userData.qualityStreakBest = this.userData.qualityStreakCurrent;
+            }
+            this.sessionAlignedCount++;
+        } else {
+            this.userData.qualityStreakCurrent = 0;
+        }
+
+        // Award XP with streak multipliers
+        let xpGained = 0;
+        let baseXP = 0;
+        let multiplier = 1;
+
+        if (rating === 'valuable') {
+            baseXP = isAligned ? 15 : 5;
+
+            // Streak multipliers
+            if (this.userData.streak >= 30) multiplier = 3;
+            else if (this.userData.streak >= 7) multiplier = 2;
+
+            // Quality streak bonus
+            if (this.userData.qualityStreakCurrent >= 5) {
+                multiplier += 0.5;
+            }
+
+            xpGained = Math.round(baseXP * multiplier);
             this.userData.xp += xpGained;
-            this.addActivity('xp', `Earned ${xpGained} XP from valuable content`, new Date());
+
+            const bonusText = multiplier > 1 ? ` (${multiplier}x bonus!)` : '';
+            this.addActivity('xp', `Earned ${xpGained} XP${bonusText}`, new Date());
         } else if (rating === 'skip') {
             if (!isAligned) {
                 xpGained = 3;
                 this.userData.xp += xpGained;
             }
+        }
+
+        // Show XP gain animation
+        if (xpGained > 0) {
+            this.showXPAnimation(card, xpGained, multiplier);
         }
 
         // Visual feedback
@@ -1242,6 +1785,175 @@ class ScrollBalancePro {
         this.userData.dailyStats.contentViewed++;
         this.calculateWellnessScore();
         this.updateAllStats();
+
+        // Check for achievements and challenges
+        this.updateDailyChallengeProgress();
+        this.checkAchievements();
+
+        // Live coaching and behavioral nudges
+        this.provideLiveCoaching();
+        this.detectMindlessScrolling();
+
+        // Update dashboard if visible
+        this.updateDashboardCoaching();
+    }
+
+    // ===== LIVE COACHING & BEHAVIORAL NUDGES =====
+    provideLiveCoaching() {
+        const now = Date.now();
+        const sessionDuration = (now - this.sessionStartTime) / 1000 / 60; // minutes
+
+        // Don't spam - wait at least 2 minutes between messages
+        if (now - this.userData.lastNudgeTime < 120000) return;
+
+        const recentRatings = this.userData.sessionRatings.slice(-10);
+        if (recentRatings.length < 5) return;
+
+        const valuableCount = recentRatings.filter(r => r.rating === 'valuable').length;
+        const alignedCount = recentRatings.filter(r => r.aligned).length;
+        const valuableRate = valuableCount / recentRatings.length;
+        const alignedRate = alignedCount / recentRatings.length;
+
+        let message = null;
+        let type = 'info';
+
+        // Positive reinforcement
+        if (valuableRate >= 0.8 && alignedRate >= 0.8) {
+            const messages = [
+                "🌟 You're in the zone! Great content choices!",
+                "✨ Excellent flow! You're riding the algorithm perfectly.",
+                "🎯 Amazing alignment! Keep this momentum going!",
+                "🚀 You're on fire! Quality content streak!"
+            ];
+            message = messages[Math.floor(Math.random() * messages.length)];
+            type = 'success';
+        }
+        // Gentle course correction
+        else if (valuableRate < 0.3 && recentRatings.length >= 8) {
+            message = "💭 Noticed you're skipping a lot. Need a mental break?";
+            type = 'warning';
+            this.userData.mindlessScrollDetected++;
+        }
+        // Micro-break suggestion
+        else if (sessionDuration > 30 && valuableRate < 0.5) {
+            message = "🧘 You've been scrolling for a while. Quick stretch?";
+            type = 'info';
+        }
+        // Quality streak celebration
+        else if (this.userData.qualityStreakCurrent === 5) {
+            message = "🎯 5 in a row! You're building quality habits!";
+            type = 'achievement';
+        }
+
+        if (message && message !== this.lastCoachingMessage) {
+            this.showToast('Live Coaching', message, type);
+            this.lastCoachingMessage = message;
+            this.userData.lastNudgeTime = now;
+        }
+    }
+
+    detectMindlessScrolling() {
+        const recent = this.userData.sessionRatings.slice(-15);
+        if (recent.length < 15) return;
+
+        const lastMinute = recent.filter(r => Date.now() - r.timestamp < 60000);
+
+        // Scrolling too fast = mindless
+        if (lastMinute.length >= 10) {
+            const skipRate = lastMinute.filter(r => r.rating === 'skip').length / lastMinute.length;
+            if (skipRate > 0.7) {
+                this.showToast(
+                    '🌊 Slow Down',
+                    'Take a breath. What are you looking for?',
+                    'warning'
+                );
+                this.userData.mindlessScrollDetected++;
+                this.userData.lastNudgeTime = Date.now();
+            }
+        }
+    }
+
+    showXPAnimation(card, xp, multiplier) {
+        const xpElement = document.createElement('div');
+        xpElement.className = 'xp-popup';
+        xpElement.textContent = `+${xp} XP`;
+
+        if (multiplier > 1) {
+            xpElement.classList.add('multiplier');
+            xpElement.textContent += ` ${multiplier}x`;
+        }
+
+        const rect = card.getBoundingClientRect();
+        xpElement.style.position = 'fixed';
+        xpElement.style.left = rect.left + rect.width / 2 + 'px';
+        xpElement.style.top = rect.top + 'px';
+
+        document.body.appendChild(xpElement);
+
+        setTimeout(() => {
+            xpElement.remove();
+        }, 2000);
+    }
+
+    showToast(title, message, type = 'info') {
+        // Create toast notification
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.innerHTML = `
+            <div class="toast-title">${title}</div>
+            <div class="toast-message">${message}</div>
+        `;
+
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.classList.add('show');
+        }, 10);
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
+    }
+
+    updateDashboardCoaching() {
+        // Live session stats on dashboard
+        const coachingContainer = document.querySelector('.live-coaching');
+        if (!coachingContainer) return;
+
+        const sessionDuration = Math.floor((Date.now() - this.sessionStartTime) / 1000 / 60);
+        const sessionRatings = this.userData.sessionRatings.length;
+        const sessionValuable = this.userData.sessionRatings.filter(r => r.rating === 'valuable').length;
+        const sessionAlignmentRate = sessionRatings > 0
+            ? Math.round((this.sessionAlignedCount / sessionRatings) * 100)
+            : 0;
+
+        coachingContainer.innerHTML = `
+            <h4>📊 Live Session</h4>
+            <div class="session-stats">
+                <div class="stat-inline">
+                    <span class="label">Duration:</span>
+                    <span class="value">${sessionDuration} min</span>
+                </div>
+                <div class="stat-inline">
+                    <span class="label">Rated:</span>
+                    <span class="value">${sessionRatings} items</span>
+                </div>
+                <div class="stat-inline">
+                    <span class="label">Valuable:</span>
+                    <span class="value">${sessionValuable} (${sessionRatings > 0 ? Math.round((sessionValuable/sessionRatings)*100) : 0}%)</span>
+                </div>
+                <div class="stat-inline ${sessionAlignmentRate >= 80 ? 'excellent' : sessionAlignmentRate >= 60 ? 'good' : ''}">
+                    <span class="label">Alignment:</span>
+                    <span class="value">${sessionAlignmentRate}%</span>
+                </div>
+                ${this.userData.qualityStreakCurrent >= 3 ? `
+                    <div class="streak-indicator">
+                        🔥 ${this.userData.qualityStreakCurrent} quality streak!
+                    </div>
+                ` : ''}
+            </div>
+        `;
     }
 
     // ===== ACTIVITY TIMELINE =====
@@ -1301,125 +2013,298 @@ class ScrollBalancePro {
     }
 
     // ===== ANALYTICS =====
-    loadAnalytics() {
-        // Clear existing charts to prevent duplicates
-        if (this.usageHeatmapChart) this.usageHeatmapChart.destroy();
-        if (this.timeDistChart) this.timeDistChart.destroy();
-        if (this.moodChartInstance) this.moodChartInstance.destroy();
+    async loadAnalytics() {
+        console.log('Loading analytics page...');
 
-        // Small delay to ensure canvas elements are in DOM
-        setTimeout(() => {
-            this.loadUsageHeatmap();
-            this.loadTimeDistribution();
-            this.loadMoodChart();
-        }, 100);
+        // Clear existing charts to prevent duplicates
+        if (this.usageHeatmapChart) {
+            this.usageHeatmapChart.destroy();
+            this.usageHeatmapChart = null;
+        }
+        if (this.timeDistChart) {
+            this.timeDistChart.destroy();
+            this.timeDistChart = null;
+        }
+        if (this.moodChartInstance) {
+            this.moodChartInstance.destroy();
+            this.moodChartInstance = null;
+        }
+
+        // Check if Chart.js is loaded
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded');
+            return;
+        }
+
+        // CRITICAL FIX: Wait for browser to complete layout pass
+        // Double requestAnimationFrame ensures canvas elements have computed dimensions
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        // Verify all canvas elements exist and have dimensions
+        const heatmapCanvas = document.getElementById('usage-heatmap');
+        const distCanvas = document.getElementById('time-distribution');
+        const moodCanvas = document.getElementById('mood-chart');
+
+        console.log('Canvas elements found:', {
+            heatmap: !!heatmapCanvas,
+            distribution: !!distCanvas,
+            mood: !!moodCanvas
+        });
+
+        if (heatmapCanvas) {
+            const rect = heatmapCanvas.getBoundingClientRect();
+            console.log('Heatmap canvas dimensions:', rect.width, 'x', rect.height);
+        }
+
+        // Load all charts
+        this.loadUsageHeatmap();
+        this.loadTimeDistribution();
+        this.loadMoodChart();
+
+        // Load advanced analytics
+        this.loadQualityTrendsChart();
+        this.loadTimeOfDayHeatmap();
+        this.generateWeeklyInsights();
+
+        console.log('Analytics charts initialized');
     }
 
     loadUsageHeatmap() {
         const canvas = document.getElementById('usage-heatmap');
-        if (!canvas || typeof Chart === 'undefined') {
-            console.log('Canvas not found or Chart.js not loaded');
+        if (!canvas) {
+            console.error('Usage heatmap canvas not found');
             return;
         }
 
-        const data = this.generateHeatmapData();
+        // Verify canvas has dimensions
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            console.error('Usage heatmap canvas has zero dimensions:', rect);
+            return;
+        }
 
-        this.usageHeatmapChart = new Chart(canvas, {
-            type: 'bar',
-            data: {
-                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                datasets: [{
-                    label: 'Screen Time (hours)',
-                    data: data,
-                    backgroundColor: '#6366f1'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: '#334155' },
-                        ticks: { color: '#94a3b8' }
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded for heatmap');
+            return;
+        }
+
+        try {
+            const data = this.generateHeatmapData();
+            console.log('Heatmap data:', data);
+            console.log('Creating heatmap chart with dimensions:', rect.width, 'x', rect.height);
+
+            this.usageHeatmapChart = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [{
+                        label: 'Screen Time (hours)',
+                        data: data,
+                        backgroundColor: '#6366f1',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `${context.parsed.y.toFixed(1)} hours`
+                            }
+                        }
                     },
-                    x: {
-                        grid: { color: '#334155' },
-                        ticks: { color: '#94a3b8' }
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8' }
+                        }
                     }
                 }
-            }
-        });
+            });
+
+            console.log('Usage heatmap chart created successfully');
+        } catch (error) {
+            console.error('Failed to create heatmap chart:', error);
+        }
     }
 
     loadTimeDistribution() {
         const canvas = document.getElementById('time-distribution');
-        if (!canvas || typeof Chart === 'undefined') {
-            console.log('Time distribution canvas not found');
+        if (!canvas) {
+            console.error('Time distribution canvas not found');
             return;
         }
 
-        this.timeDistChart = new Chart(canvas, {
-            type: 'pie',
-            data: {
-                labels: ['Social', 'Learning', 'Entertainment', 'Productive'],
-                datasets: [{
-                    data: [35, 25, 25, 15],
-                    backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ec4899']
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: { color: '#94a3b8' }
+        // Verify canvas has dimensions
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            console.error('Time distribution canvas has zero dimensions:', rect);
+            return;
+        }
+
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded for time distribution');
+            return;
+        }
+
+        try {
+            console.log('Creating time distribution chart with dimensions:', rect.width, 'x', rect.height);
+            // Calculate actual distribution based on content ratings
+            const ratings = this.userData.contentRatings;
+            let social = 0, learning = 0, entertainment = 0, productive = 0;
+
+            if (ratings.length > 0) {
+                ratings.forEach(rating => {
+                    if (rating.goal === 'learn') learning++;
+                    else if (rating.goal === 'productivity') productive++;
+                    else if (rating.goal === 'chill') entertainment++;
+                    else social++;
+                });
+            } else {
+                // Default values for new users
+                social = 35;
+                learning = 25;
+                entertainment = 25;
+                productive = 15;
+            }
+
+            this.timeDistChart = new Chart(canvas, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Social', 'Learning', 'Entertainment', 'Productive'],
+                    datasets: [{
+                        data: [social, learning, entertainment, productive],
+                        backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ec4899'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#94a3b8',
+                                padding: 15,
+                                font: { size: 12 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                    return `${context.label}: ${percentage}%`;
+                                }
+                            }
+                        }
                     }
                 }
-            }
-        });
+            });
+
+            console.log('Time distribution chart created successfully');
+        } catch (error) {
+            console.error('Failed to create time distribution chart:', error);
+        }
     }
 
     loadMoodChart() {
         const canvas = document.getElementById('mood-chart');
-        if (!canvas || typeof Chart === 'undefined') {
-            console.log('Mood chart canvas not found');
+        if (!canvas) {
+            console.error('Mood chart canvas not found');
             return;
         }
 
-        this.moodChartInstance = new Chart(canvas, {
-            type: 'line',
-            data: {
-                labels: this.getLast7Days(),
-                datasets: [{
-                    label: 'Mood Score',
-                    data: [70, 75, 80, 78, 85, 88, 90],
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        grid: { color: '#334155' },
-                        ticks: { color: '#94a3b8' }
-                    },
-                    x: {
-                        grid: { color: '#334155' },
-                        ticks: { color: '#94a3b8' }
-                    }
+        // Verify canvas has dimensions
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            console.error('Mood chart canvas has zero dimensions:', rect);
+            return;
+        }
+
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded for mood chart');
+            return;
+        }
+
+        try {
+            console.log('Creating mood chart with dimensions:', rect.width, 'x', rect.height);
+            // Get real mood data for last 7 days
+            const moodData = [];
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateKey = date.toDateString();
+
+                // Get moods for this day
+                const dayMoods = this.userData.moodHistory.filter(m => {
+                    return new Date(m.time).toDateString() === dateKey;
+                });
+
+                // Calculate average mood score for the day
+                if (dayMoods.length > 0) {
+                    const avgScore = dayMoods.reduce((sum, m) => sum + (m.score || this.getMoodScore(m.mood)), 0) / dayMoods.length;
+                    moodData.push(Math.round(avgScore));
+                } else {
+                    // No data for this day, use baseline
+                    moodData.push(i === 0 ? 85 : null); // null for missing data, 85 for today
                 }
             }
-        });
+
+            this.moodChartInstance = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: this.getLast7Days(),
+                    datasets: [{
+                        label: 'Mood Score',
+                        data: moodData,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        spanGaps: true // Connect across null values
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `Mood: ${context.parsed.y}/100`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    }
+                }
+            });
+
+            console.log('Mood chart created successfully');
+        } catch (error) {
+            console.error('Failed to create mood chart:', error);
+        }
     }
 
     generateHeatmapData() {
@@ -1436,6 +2321,311 @@ class ScrollBalancePro {
             data.push(Math.round(screenTimeHours * 10) / 10); // Round to 1 decimal
         }
         return data;
+    }
+
+    // ===== ADVANCED ANALYTICS =====
+    loadQualityTrendsChart() {
+        const canvas = document.getElementById('quality-trends-chart');
+        if (!canvas) return;
+
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        // Calculate quality trends over last 14 days
+        const qualityData = [];
+        const labels = [];
+
+        for (let i = 13; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateKey = date.toDateString();
+
+            const dayRatings = this.userData.contentRatings.filter(r => {
+                return new Date(r.timestamp).toDateString() === dateKey;
+            });
+
+            let quality = null;
+            if (dayRatings.length >= 3) {
+                const valuable = dayRatings.filter(r => r.rating === 'valuable').length;
+                quality = Math.round((valuable / dayRatings.length) * 100);
+            }
+
+            qualityData.push(quality);
+            labels.push(this.formatShortDate(date));
+        }
+
+        if (this.qualityTrendsChart) {
+            this.qualityTrendsChart.destroy();
+        }
+
+        this.qualityTrendsChart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Content Quality %',
+                    data: qualityData,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    spanGaps: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { color: '#334155' },
+                        ticks: { color: '#94a3b8' }
+                    },
+                    x: {
+                        grid: { color: '#334155' },
+                        ticks: { color: '#94a3b8', maxRotation: 45 }
+                    }
+                }
+            }
+        });
+    }
+
+    loadTimeOfDayHeatmap() {
+        const canvas = document.getElementById('time-heatmap-chart');
+        if (!canvas) return;
+
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        // Calculate quality by hour
+        const hourlyQuality = [];
+        const labels = [];
+
+        for (let hour = 0; hour < 24; hour++) {
+            const hourData = this.userData.hourlyEngagement[hour];
+
+            let quality = 0;
+            if (hourData.ratings > 0) {
+                quality = Math.round((hourData.valuable / hourData.ratings) * 100);
+            }
+
+            hourlyQuality.push(hourData.ratings > 0 ? quality : null);
+
+            // Format hour (12h format)
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const hour12 = hour % 12 || 12;
+            labels.push(`${hour12}${ampm}`);
+        }
+
+        if (this.timeHeatmapChart) {
+            this.timeHeatmapChart.destroy();
+        }
+
+        this.timeHeatmapChart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Quality %',
+                    data: hourlyQuality,
+                    backgroundColor: hourlyQuality.map(q => {
+                        if (q === null) return '#1e293b';
+                        if (q >= 75) return '#10b981';
+                        if (q >= 50) return '#f59e0b';
+                        return '#ef4444';
+                    }),
+                    borderRadius: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { color: '#334155' },
+                        ticks: { color: '#94a3b8' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#94a3b8', font: { size: 9 } }
+                    }
+                }
+            }
+        });
+    }
+
+    generateWeeklyInsights() {
+        const container = document.querySelector('.weekly-insights');
+        if (!container) return;
+
+        // Calculate last 7 days vs previous 7 days
+        const now = new Date();
+        const thisWeek = [];
+        const lastWeek = [];
+
+        for (let i = 0; i < 7; i++) {
+            const thisDate = new Date(now);
+            thisDate.setDate(now.getDate() - i);
+
+            const lastDate = new Date(now);
+            lastDate.setDate(now.getDate() - i - 7);
+
+            const thisRatings = this.userData.contentRatings.filter(r => {
+                return new Date(r.timestamp).toDateString() === thisDate.toDateString();
+            });
+
+            const lastRatings = this.userData.contentRatings.filter(r => {
+                return new Date(r.timestamp).toDateString() === lastDate.toDateString();
+            });
+
+            thisWeek.push(...thisRatings);
+            lastWeek.push(...lastRatings);
+        }
+
+        // Calculate metrics
+        const thisValuable = thisWeek.filter(r => r.rating === 'valuable').length;
+        const lastValuable = lastWeek.filter(r => r.rating === 'valuable').length;
+
+        const thisAligned = thisWeek.filter(r => r.aligned).length;
+        const lastAligned = lastWeek.filter(r => r.aligned).length;
+
+        const thisQuality = thisWeek.length > 0 ? (thisValuable / thisWeek.length) * 100 : 0;
+        const lastQuality = lastWeek.length > 0 ? (lastValuable / lastWeek.length) * 100 : 0;
+
+        const thisAlignment = thisWeek.length > 0 ? (thisAligned / thisWeek.length) * 100 : 0;
+        const lastAlignment = lastWeek.length > 0 ? (lastAligned / lastWeek.length) * 100 : 0;
+
+        const qualityChange = thisQuality - lastQuality;
+        const alignmentChange = thisAlignment - lastAlignment;
+
+        // Find best/worst hours
+        const bestHour = this.findBestHour();
+        const worstHour = this.findWorstHour();
+
+        // Generate insights
+        const insights = [];
+
+        if (qualityChange > 5) {
+            insights.push({
+                type: 'positive',
+                icon: '📈',
+                text: `Content quality improved by ${Math.round(qualityChange)}% this week!`
+            });
+        } else if (qualityChange < -5) {
+            insights.push({
+                type: 'negative',
+                icon: '📉',
+                text: `Content quality dropped ${Math.round(Math.abs(qualityChange))}% this week.`
+            });
+        }
+
+        if (alignmentChange > 5) {
+            insights.push({
+                type: 'positive',
+                icon: '🎯',
+                text: `Goal alignment up ${Math.round(alignmentChange)}%! You're finding what matters.`
+            });
+        }
+
+        if (this.userData.qualityStreakBest >= 5) {
+            insights.push({
+                type: 'achievement',
+                icon: '🔥',
+                text: `Best streak: ${this.userData.qualityStreakBest} quality items in a row!`
+            });
+        }
+
+        if (bestHour) {
+            const ampm = bestHour >= 12 ? 'PM' : 'AM';
+            const hour12 = bestHour % 12 || 12;
+            insights.push({
+                type: 'info',
+                icon: '⏰',
+                text: `You're most mindful around ${hour12}${ampm}`
+            });
+        }
+
+        if (worstHour && this.userData.hourlyEngagement[worstHour].ratings >= 5) {
+            const ampm = worstHour >= 12 ? 'PM' : 'AM';
+            const hour12 = worstHour % 12 || 12;
+            insights.push({
+                type: 'warning',
+                icon: '⚠️',
+                text: `Mindless scrolling tends to happen around ${hour12}${ampm}`
+            });
+        }
+
+        if (this.userData.streak >= 7) {
+            insights.push({
+                type: 'positive',
+                icon: '💎',
+                text: `${this.userData.streak}-day streak! You're building lasting habits.`
+            });
+        }
+
+        // Render insights
+        if (insights.length === 0) {
+            container.innerHTML = '<p class="no-insights">Keep rating content to unlock personalized insights!</p>';
+            return;
+        }
+
+        container.innerHTML = insights.map(insight => `
+            <div class="insight-card insight-${insight.type}">
+                <span class="insight-icon">${insight.icon}</span>
+                <span class="insight-text">${insight.text}</span>
+            </div>
+        `).join('');
+    }
+
+    findBestHour() {
+        let bestHour = -1;
+        let bestQuality = 0;
+
+        for (let hour = 0; hour < 24; hour++) {
+            const hourData = this.userData.hourlyEngagement[hour];
+            if (hourData.ratings < 5) continue; // Need at least 5 ratings
+
+            const quality = (hourData.valuable / hourData.ratings) * 100;
+            if (quality > bestQuality) {
+                bestQuality = quality;
+                bestHour = hour;
+            }
+        }
+
+        return bestHour >= 0 ? bestHour : null;
+    }
+
+    findWorstHour() {
+        let worstHour = -1;
+        let worstQuality = 100;
+
+        for (let hour = 0; hour < 24; hour++) {
+            const hourData = this.userData.hourlyEngagement[hour];
+            if (hourData.ratings < 5) continue;
+
+            const quality = (hourData.valuable / hourData.ratings) * 100;
+            if (quality < worstQuality) {
+                worstQuality = quality;
+                worstHour = hour;
+            }
+        }
+
+        return worstHour >= 0 ? worstHour : null;
+    }
+
+    formatShortDate(date) {
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        return `${month}/${day}`;
     }
 
     // ===== MODALS =====
