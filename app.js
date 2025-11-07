@@ -2981,7 +2981,7 @@ class ScrollBalancePro {
         }
 
         // Quality streak
-        if (this.userData.qualityStreakCurrent >= 7) {
+        if (this.userData.qualityStreakCurrent >= 2) {
             if (Math.random() < 0.5) { // 50% chance
                 this.triggerOwlAppearance('quality_streak');
             }
