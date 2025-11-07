@@ -1484,14 +1484,45 @@ class ScrollBalancePro {
     }
 
     startEngagementTracking() {
-        // Clear any existing tracker
+        // Clear any existing tracker and observer
         if (this.engagementTracker) {
             clearInterval(this.engagementTracker);
         }
+        if (this.engagementObserver) {
+            this.engagementObserver.disconnect();
+        }
 
-        // Track engagement every 100ms
+        // Create IntersectionObserver to detect when cards enter/leave viewport
+        this.engagementObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const card = entry.target;
+
+                if (entry.isIntersecting && entry.intersectionRatio >= 0.8) {
+                    // Card is fully visible (80%+ in viewport)
+                    // Start the timer NOW (not when it was created)
+                    card.dataset.viewStart = Date.now().toString();
+                    card.dataset.isActive = 'true';
+                    console.log('📖 Started reading:', card.dataset.id);
+                } else {
+                    // Card left viewport - pause timer
+                    card.dataset.isActive = 'false';
+                }
+            });
+        }, {
+            threshold: [0, 0.8, 1.0], // Trigger at 0%, 80%, and 100% visibility
+            rootMargin: '0px'
+        });
+
+        // Observe all content cards
+        const cards = document.querySelectorAll('.content-card');
+        cards.forEach(card => {
+            card.dataset.isActive = 'false'; // Start as inactive
+            this.engagementObserver.observe(card);
+        });
+
+        // Track engagement every 100ms - but ONLY for active cards
         this.engagementTracker = setInterval(() => {
-            const cards = document.querySelectorAll('.content-card');
+            const cards = document.querySelectorAll('.content-card[data-is-active="true"]');
             cards.forEach(card => {
                 const viewStart = parseInt(card.dataset.viewStart);
                 const expectedTime = parseInt(card.dataset.expectedTime);
@@ -1566,8 +1597,7 @@ class ScrollBalancePro {
                  data-goal="${sanitizeHTML(item.goal)}"
                  data-aligned="${item.aligned}"
                  data-url="${safeUrl}"
-                 data-expected-time="${expectedSeconds}"
-                 data-view-start="${Date.now()}">
+                 data-expected-time="${expectedSeconds}">
                 <div class="content-header">
                     <div class="content-avatar">${emoji}</div>
                     <div class="content-info">
@@ -1751,8 +1781,7 @@ class ScrollBalancePro {
                  data-id="${item.id}"
                  data-goal="${item.goal}"
                  data-aligned="${item.aligned}"
-                 data-expected-time="${expectedSeconds}"
-                 data-view-start="${Date.now()}">
+                 data-expected-time="${expectedSeconds}">
                 <div class="content-header">
                     <div class="content-avatar">${item.emoji}</div>
                     <div class="content-info">
