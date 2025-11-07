@@ -3093,6 +3093,63 @@ class ScrollBalancePro {
         });
     }
 
+    // Simple test function for debugging
+    testOwl() {
+        console.log('🦉 TEST OWL CALLED');
+        console.log('🦉 owlEnabled:', this.userData.owlEnabled);
+        console.log('🦉 owlTemperament:', this.userData.owlTemperament);
+
+        const testMessage = "Hello! I'm your owl companion! This is a test message. 🦉";
+
+        console.log('🦉 Creating owl element...');
+        const owl = document.createElement('div');
+        owl.className = 'owl-companion';
+        owl.style.position = 'fixed';
+        owl.style.bottom = '20px';
+        owl.style.left = '20px';
+        owl.style.zIndex = '99999';
+
+        owl.innerHTML = `
+            <div class="owl-container">
+                <div class="owl-character">
+                    <div class="owl-body">
+                        <div class="owl-face">
+                            <div class="owl-eyes">
+                                <div class="owl-eye left">
+                                    <div class="owl-pupil"></div>
+                                </div>
+                                <div class="owl-eye right">
+                                    <div class="owl-pupil"></div>
+                                </div>
+                            </div>
+                            <div class="owl-beak"></div>
+                        </div>
+                        <div class="owl-wing left"></div>
+                        <div class="owl-wing right"></div>
+                    </div>
+                    <div class="owl-feet">
+                        <div class="owl-foot left"></div>
+                        <div class="owl-foot right"></div>
+                    </div>
+                </div>
+                <div class="owl-speech-bubble">
+                    <div class="owl-message">${testMessage}</div>
+                    <div class="owl-actions">
+                        <button class="owl-btn owl-dismiss" onclick="document.querySelector('.owl-companion').remove()">Thanks!</button>
+                        <button class="owl-btn owl-snooze" onclick="document.querySelector('.owl-companion').remove()">Later</button>
+                    </div>
+                </div>
+                <button class="owl-close" onclick="document.querySelector('.owl-companion').remove()">&times;</button>
+            </div>
+        `;
+
+        console.log('🦉 Adding to document body...');
+        document.body.appendChild(owl);
+        console.log('🦉 Owl element added!');
+        console.log('🦉 Owl in DOM:', document.querySelector('.owl-companion'));
+        console.log('🦉 Computed styles:', window.getComputedStyle(owl));
+    }
+
     showReflectionModal() {
         document.getElementById('reflection-modal').classList.add('active');
     }
