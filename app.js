@@ -77,7 +77,10 @@ class ScrollBalancePro {
             owlEnabled: true,
             owlInteractions: [],
             lastOwlAppearance: 0,
-            owlDismissals: 0
+            owlDismissals: 0,
+
+            // Hardcore Mode
+            hardcoreMode: false
         };
 
         // Charts
@@ -3037,6 +3040,24 @@ class ScrollBalancePro {
                 if (owlSettingsDiv) {
                     owlSettingsDiv.style.opacity = e.target.checked ? '1' : '0.5';
                     owlSettingsDiv.style.pointerEvents = e.target.checked ? 'auto' : 'none';
+                }
+            });
+        }
+
+        // Hardcore mode toggle
+        const hardcoreModeCheckbox = document.getElementById('hardcore-mode');
+        if (hardcoreModeCheckbox) {
+            hardcoreModeCheckbox.checked = this.userData.hardcoreMode;
+
+            hardcoreModeCheckbox.addEventListener('change', (e) => {
+                this.userData.hardcoreMode = e.target.checked;
+                this.saveData();
+
+                // Show confirmation toast
+                if (e.target.checked) {
+                    this.showToast('⚡ Hardcore mode enabled! You\'ll be restricted from social media for 24 hours if you don\'t meet your daily wellness goals.', 'warning');
+                } else {
+                    this.showToast('Hardcore mode disabled', 'info');
                 }
             });
         }
