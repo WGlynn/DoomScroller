@@ -841,6 +841,198 @@ input:checked + .slider:before {
     color: var(--text-secondary);
 }
 
+/* ===== CONTENT FEED ===== */
+.feed-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-xl);
+}
+
+.feed-header h2 {
+    font-size: 1.5rem;
+}
+
+.feed-controls {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.content-feed {
+    display: grid;
+    gap: var(--spacing-lg);
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.content-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    transition: all var(--transition-base);
+    animation: slideUp 0.3s ease;
+}
+
+.content-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--border-light);
+}
+
+.content-header {
+    padding: var(--spacing-lg);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.content-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.content-info {
+    flex: 1;
+}
+
+.content-username {
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: var(--spacing-xs);
+}
+
+.content-goal {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.content-body {
+    padding: 0 var(--spacing-lg) var(--spacing-lg);
+}
+
+.content-media {
+    width: 100%;
+    height: 300px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 5rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.content-media::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+}
+
+.content-text {
+    font-size: 1rem;
+    line-height: 1.6;
+    margin-bottom: var(--spacing-md);
+    color: var(--text-primary);
+}
+
+.content-tags {
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+}
+
+.tag {
+    padding: var(--spacing-xs) var(--spacing-md);
+    background: rgba(99, 102, 241, 0.15);
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: var(--primary-light);
+}
+
+.content-actions {
+    padding: var(--spacing-lg);
+    display: flex;
+    gap: var(--spacing-md);
+    border-top: 1px solid var(--border);
+}
+
+.action-btn {
+    flex: 1;
+    padding: var(--spacing-md);
+    border: 2px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all var(--transition-base);
+}
+
+.action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.action-btn.valuable {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: var(--success);
+    color: var(--success);
+}
+
+.action-btn.valuable:hover {
+    background: rgba(16, 185, 129, 0.2);
+}
+
+.action-btn.skip {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--error);
+    color: var(--error);
+}
+
+.action-btn.skip:hover {
+    background: rgba(239, 68, 68, 0.2);
+}
+
+/* ===== ANALYTICS ===== */
+.analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+.analytics-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-xl);
+    min-height: 350px;
+}
+
+.analytics-card h3 {
+    font-size: 1.25rem;
+    margin-bottom: var(--spacing-lg);
+}
+
+.analytics-card canvas {
+    width: 100% !important;
+    height: 250px !important;
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 1024px) {
     body {

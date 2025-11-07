@@ -102,6 +102,8 @@ class ScrollBalancePro {
             this.loadAnalytics();
         } else if (pageName === 'goals') {
             this.loadGoalsPage();
+        } else if (pageName === 'feed') {
+            this.loadSmartFeed();
         }
     }
 
@@ -367,6 +369,242 @@ class ScrollBalancePro {
                 </div>
             </div>
         `).join('');
+    }
+
+    // ===== SMART FEED =====
+    loadSmartFeed() {
+        const container = document.getElementById('smart-feed');
+        if (!container) return;
+
+        // Setup filter buttons
+        this.setupFeedFilters();
+
+        // Load initial content
+        this.currentFeedFilter = 'all';
+        this.renderFeedContent();
+    }
+
+    setupFeedFilters() {
+        const filterButtons = document.querySelectorAll('.filter-btn');
+        filterButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Update active state
+                filterButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                // Filter content
+                const filter = btn.textContent.toLowerCase().trim();
+                this.currentFeedFilter = filter;
+                this.renderFeedContent();
+            });
+        });
+    }
+
+    renderFeedContent() {
+        const container = document.getElementById('smart-feed');
+        if (!container) return;
+
+        // Generate content based on filter
+        const content = this.generateFeedContent(10);
+        container.innerHTML = content.map(item => this.createContentCard(item)).join('');
+
+        // Add event listeners to action buttons
+        container.querySelectorAll('.content-card').forEach(card => {
+            const valuableBtn = card.querySelector('.action-btn.valuable');
+            const skipBtn = card.querySelector('.action-btn.skip');
+
+            valuableBtn?.addEventListener('click', () => {
+                this.rateContent(card, 'valuable');
+            });
+
+            skipBtn?.addEventListener('click', () => {
+                this.rateContent(card, 'skip');
+            });
+        });
+    }
+
+    generateFeedContent(count) {
+        const contentTypes = [
+            { goal: 'learn', emoji: '🧠', topics: ['History', 'Science', 'Technology', 'Philosophy', 'Business'], category: 'Educational' },
+            { goal: 'chill', emoji: '😌', topics: ['Nature', 'Music', 'Art', 'Comedy', 'Travel'], category: 'All' },
+            { goal: 'reduce-anxiety', emoji: '🧘', topics: ['Meditation', 'Mindfulness', 'Breathing', 'Calm', 'Yoga'], category: 'Goal-Aligned' },
+            { goal: 'productivity', emoji: '⚡', topics: ['Tips', 'Hacks', 'Workflow', 'Tools', 'Automation'], category: 'Educational' },
+            { goal: 'sleep', emoji: '😴', topics: ['Relaxation', 'Night Routine', 'Sleep Tips', 'ASMR', 'Wind Down'], category: 'Goal-Aligned' }
+        ];
+
+        const content = [];
+
+        for (let i = 0; i < count; i++) {
+            // Pick random content type
+            let contentType;
+
+            // Filter based on current filter
+            if (this.currentFeedFilter === 'goal-aligned' && this.userData.goals.length > 0) {
+                const randomGoal = this.userData.goals[Math.floor(Math.random() * this.userData.goals.length)];
+                contentType = contentTypes.find(ct => ct.goal === randomGoal) || contentTypes[0];
+            } else if (this.currentFeedFilter === 'educational') {
+                const educational = contentTypes.filter(ct => ct.category === 'Educational');
+                contentType = educational[Math.floor(Math.random() * educational.length)];
+            } else {
+                contentType = contentTypes[Math.floor(Math.random() * contentTypes.length)];
+            }
+
+            const topic = contentType.topics[Math.floor(Math.random() * contentType.topics.length)];
+            const isAligned = this.userData.goals.includes(contentType.goal);
+
+            content.push({
+                id: `content-${Date.now()}-${i}`,
+                emoji: contentType.emoji,
+                goal: contentType.goal,
+                topic: topic,
+                aligned: isAligned,
+                title: this.generateContentTitle(contentType.goal, topic),
+                username: this.generateUsername()
+            });
+        }
+
+        return content;
+    }
+
+    generateContentTitle(goal, topic) {
+        const titles = {
+            'learn': [
+                `Mind-blowing ${topic} fact that'll make you rethink everything 🤯`,
+                `Quick ${topic} lesson but make it actually interesting`,
+                `POV: You're learning ${topic} but it doesn't feel like homework`,
+                `${topic} explained in a way that actually makes sense`
+            ],
+            'chill': [
+                `Just ${topic} vibes, nothing else`,
+                `When you need a ${topic} moment`,
+                `${topic} content that hits different`,
+                `Pure ${topic} energy, no stress`
+            ],
+            'reduce-anxiety': [
+                `${topic} technique that actually works`,
+                `Try this ${topic} exercise right now`,
+                `${topic} content for when everything feels like too much`,
+                `Simple ${topic} practice you can do anywhere`
+            ],
+            'productivity': [
+                `${topic} that changed how I work`,
+                `Stop scrolling and try this ${topic}`,
+                `${topic} that actually works (not clickbait)`,
+                `Game-changing ${topic} for getting things done`
+            ],
+            'sleep': [
+                `${topic} for better sleep tonight`,
+                `${topic} routine that'll knock you out`,
+                `Try this ${topic} before bed`,
+                `${topic} that helped me sleep like a baby`
+            ]
+        };
+
+        const options = titles[goal] || titles['learn'];
+        return options[Math.floor(Math.random() * options.length)];
+    }
+
+    generateUsername() {
+        const usernames = [
+            '@mindfulcreator',
+            '@brainrot_academy',
+            '@chillvibes',
+            '@producti_beast',
+            '@zenmaster',
+            '@knowledge_drop',
+            '@calm_corner',
+            '@flow_state',
+            '@wise_scrolls',
+            '@balanced_life'
+        ];
+        return usernames[Math.floor(Math.random() * usernames.length)];
+    }
+
+    createContentCard(item) {
+        const alignedBadge = item.aligned ? '<span class="tag" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">✓ Goal Aligned</span>' : '';
+
+        return `
+            <div class="content-card" data-id="${item.id}" data-goal="${item.goal}" data-aligned="${item.aligned}">
+                <div class="content-header">
+                    <div class="content-avatar">${item.emoji}</div>
+                    <div class="content-info">
+                        <div class="content-username">${item.username}</div>
+                        <div class="content-goal">${item.topic}</div>
+                    </div>
+                </div>
+                <div class="content-body">
+                    <div class="content-media">${item.emoji}</div>
+                    <div class="content-text">${item.title}</div>
+                    <div class="content-tags">
+                        <span class="tag">#${item.goal.replace('-', '')}</span>
+                        <span class="tag">#${item.topic.toLowerCase()}</span>
+                        ${alignedBadge}
+                    </div>
+                </div>
+                <div class="content-actions">
+                    <button class="action-btn valuable">👍 Valuable</button>
+                    <button class="action-btn skip">👎 Skip</button>
+                </div>
+            </div>
+        `;
+    }
+
+    rateContent(card, rating) {
+        const isAligned = card.dataset.aligned === 'true';
+        const goal = card.dataset.goal;
+        const contentId = card.dataset.id;
+
+        // Record rating
+        this.userData.contentRatings.push({
+            id: contentId,
+            goal: goal,
+            aligned: isAligned,
+            rating: rating,
+            timestamp: Date.now()
+        });
+
+        // Award XP
+        let xpGained = 0;
+        if (rating === 'valuable') {
+            xpGained = isAligned ? 15 : 5;
+            this.userData.xp += xpGained;
+            this.addActivity('xp', `Earned ${xpGained} XP from valuable content`, new Date());
+        } else if (rating === 'skip') {
+            if (!isAligned) {
+                xpGained = 3;
+                this.userData.xp += xpGained;
+            }
+        }
+
+        // Visual feedback
+        card.style.transform = 'translateX(-100%)';
+        card.style.opacity = '0';
+        card.style.transition = 'all 0.3s ease';
+
+        setTimeout(() => {
+            card.remove();
+            // Load one more item to replace it
+            const newContent = this.generateFeedContent(1);
+            const container = document.getElementById('smart-feed');
+            if (container && newContent.length > 0) {
+                const newCard = this.createContentCard(newContent[0]);
+                container.insertAdjacentHTML('beforeend', newCard);
+
+                // Add event listeners to new card
+                const addedCard = container.lastElementChild;
+                addedCard.querySelector('.action-btn.valuable')?.addEventListener('click', () => {
+                    this.rateContent(addedCard, 'valuable');
+                });
+                addedCard.querySelector('.action-btn.skip')?.addEventListener('click', () => {
+                    this.rateContent(addedCard, 'skip');
+                });
+            }
+        }, 300);
+
+        // Update stats
+        this.userData.dailyStats.contentViewed++;
+        this.calculateWellnessScore();
+        this.updateAllStats();
     }
 
     // ===== ACTIVITY TIMELINE =====
