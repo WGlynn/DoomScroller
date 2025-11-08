@@ -1821,17 +1821,19 @@ class ScrollBalancePro {
         this.provideLiveCoaching();
         this.detectMindlessScrolling();
 
-        // Trigger owl appearance after every vote
-        if (rating === 'valuable' && isAligned) {
-            // User rated aligned content as valuable - celebrate!
-            this.triggerOwlAppearance('quality_streak', true);
-        } else if (rating === 'valuable') {
-            // User found something valuable
-            this.triggerOwlAppearance('quality_streak', true);
-        } else if (rating === 'skip') {
-            // User skipped content - gentle nudge
-            this.triggerOwlAppearance('checkin', true);
-        }
+        // Trigger owl appearance after every vote - delay to show after card animation
+        setTimeout(() => {
+            if (rating === 'valuable' && isAligned) {
+                // User rated aligned content as valuable - celebrate!
+                this.triggerOwlAppearance('quality_streak', true);
+            } else if (rating === 'valuable') {
+                // User found something valuable
+                this.triggerOwlAppearance('quality_streak', true);
+            } else if (rating === 'skip') {
+                // User skipped content - gentle nudge
+                this.triggerOwlAppearance('checkin', true);
+            }
+        }, 400);
 
         // Update dashboard if visible
         this.updateDashboardCoaching();
@@ -2901,6 +2903,10 @@ class ScrollBalancePro {
     }
 
     triggerOwlAppearance(context, forceShow = false) {
+        // Always check if owl is enabled
+        if (!this.userData.owlEnabled) return;
+
+        // Check cooldown only if not forcing
         if (!forceShow && !this.shouldOwlAppear()) return;
 
         const messages = this.getOwlMessages(context);
