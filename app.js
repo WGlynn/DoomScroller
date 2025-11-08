@@ -1821,8 +1821,17 @@ class ScrollBalancePro {
         this.provideLiveCoaching();
         this.detectMindlessScrolling();
 
-        // Check owl triggers for contextual guidance
-        this.checkOwlTriggers();
+        // Trigger owl appearance after every vote
+        if (rating === 'valuable' && isAligned) {
+            // User rated aligned content as valuable - celebrate!
+            this.triggerOwlAppearance('quality_streak', true);
+        } else if (rating === 'valuable') {
+            // User found something valuable
+            this.triggerOwlAppearance('quality_streak', true);
+        } else if (rating === 'skip') {
+            // User skipped content - gentle nudge
+            this.triggerOwlAppearance('checkin', true);
+        }
 
         // Update dashboard if visible
         this.updateDashboardCoaching();
